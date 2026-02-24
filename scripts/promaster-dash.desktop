@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=ProMaster Dash
+Comment=Vehicle Dashboard for Ram ProMaster
+Exec=/home/pi/promaster_dash/scripts/launch.sh
+Icon=/home/pi/promaster_dash/assets/icon.png
+Terminal=false
+Type=Application
+Categories=Utility;
+StartupNotify=false
