@@ -1,0 +1,3 @@
+PySide6
+pyserial
+gpsd-py3
