@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer, QRect, QThread, Slot
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap, QKeyEvent
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -1014,3 +1014,14 @@ class MainWindow(QMainWindow):
         else:
             self.dtc_codes = []
             self.state.dtc_count = 0
+
+    # ---------- Keyboard handling ----------
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """Handle keyboard events for app control."""
+        if event.key() == Qt.Key_Escape:
+            self.close()
+        elif event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
+            self.close()
+        else:
+            super().keyPressEvent(event)
