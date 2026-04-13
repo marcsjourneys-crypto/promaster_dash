@@ -405,8 +405,11 @@ async function pollTransTemp(): Promise<void> {
     dlog(`OBD: Trans parse FAILED for raw: "${resp}"`);
   }
 
-  // Reset header to default for other commands
+  // Reset header to default and flush adapter receive buffer.
+  // Without the flush, the next Mode 01 poll can pick up stale data
+  // from the previous 29-bit CAN context.
   await sendCommand('ATSH7DF', 1500);
+  await sendCommand('ATAR', 1500);
 }
 
 // ---------------------------------------------------------------------------
@@ -469,8 +472,9 @@ async function pollMode22Pid(id: string): Promise<void> {
     dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
   }
 
-  // Reset header to default
+  // Reset header to default + flush receive buffer
   await sendCommand('ATSH7DF', 1500);
+  await sendCommand('ATAR', 1500);
 }
 
 // ---------------------------------------------------------------------------
