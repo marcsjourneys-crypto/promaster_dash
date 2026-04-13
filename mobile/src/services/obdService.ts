@@ -395,7 +395,8 @@ async function pollTransTemp(): Promise<void> {
   const bytes = parseMode22(resp, transCandidate.did);
 
   if (bytes && bytes.length >= 1) {
-    dlog(`OBD: Trans bytes[0]=0x${bytes[0].toString(16).padStart(2, '0').toUpperCase()}`);
+    const hexBytes = bytes.map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    dlog(`OBD: Trans bytes=[${hexBytes}]`);
     const tempF = transTempToF(bytes, transCandidate.twoByteMode);
     dlog(`OBD: Trans = ${tempF.toFixed(1)}\u00b0F`);
     if (tempF >= -40 && tempF <= 400) {
@@ -440,7 +441,11 @@ async function pollMode01Pid(id: string): Promise<void> {
   const bytes = parseMode01(resp, conv.pid);
   if (bytes && bytes.length >= conv.minBytes) {
     const value = conv.convert(bytes);
+    const hexBytes = bytes.slice(0, conv.minBytes).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    dlog(`OBD: ${id} bytes=[${hexBytes}] → ${value.toFixed(1)}`);
     useVehicleStore.getState().updateOBD({ [conv.storeKey]: value } as Partial<OBDData>);
+  } else {
+    dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
   }
 }
 
