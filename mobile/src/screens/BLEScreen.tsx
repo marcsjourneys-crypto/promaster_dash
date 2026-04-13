@@ -24,7 +24,7 @@ import {
   type ScannedDevice,
   type TransportType,
 } from '../services/obdTransport';
-import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, loadTransCandidate } from '../services/obdService';
+import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, loadTransCandidate, clearTransCandidate } from '../services/obdService';
 import { scanCandidates, selectBestCandidate, type CandidateResult } from '../services/transTempCandidates';
 import { debugListAccessories } from '../services/btClassicManager';
 import { dlog } from '../services/debugLog';
@@ -105,7 +105,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
         const saved = await loadTransCandidate();
         if (saved && saved.twoByteMode === false) {
           dlog('Trans: Clearing stale candidate (twoByteMode was false, needs re-scan)');
-          await AsyncStorage.removeItem('@promaster/transCandidate');
+          await clearTransCandidate();
           setTransCandidate(null);
         } else if (saved) {
           setTransCandidate(saved);
