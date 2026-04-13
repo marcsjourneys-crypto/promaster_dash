@@ -60,7 +60,7 @@ interface PersistedTripState {
 }
 
 /** Save active trip state to AsyncStorage. Called periodically. */
-async function persistTripState(): Promise<void> {
+export async function persistTripState(): Promise<void> {
   if (!stats || !stats.tripId) return;
   const data: PersistedTripState = {
     tripId: stats.tripId,
@@ -77,14 +77,18 @@ async function persistTripState(): Promise<void> {
   };
   try {
     await AsyncStorage.setItem(TRIP_STATE_KEY, JSON.stringify(data));
-  } catch {}
+  } catch (e: any) {
+    dlog(`Trip: Failed to persist state: ${e.message}`);
+  }
 }
 
 /** Clear persisted trip state (on normal trip end). */
 async function clearPersistedTripState(): Promise<void> {
   try {
     await AsyncStorage.removeItem(TRIP_STATE_KEY);
-  } catch {}
+  } catch (e: any) {
+    dlog(`Trip: Failed to clear persisted state: ${e.message}`);
+  }
 }
 
 /**
@@ -98,6 +102,14 @@ export async function restoreTrip(): Promise<boolean> {
     if (!raw) return false;
 
     const data: PersistedTripState = JSON.parse(raw);
+
+    // Discard trips older than 24 hours — clearly not an ongoing drive
+    const ageHours = (Date.now() / 1000 - data.startTs) / 3600;
+    if (ageHours > 24) {
+      dlog(`Trip: Persisted trip is ${ageHours.toFixed(0)}h old, discarding`);
+      await clearPersistedTripState();
+      return false;
+    }
 
     // Restore TripStats
     stats = new TripStats();
@@ -303,6 +315,7 @@ export function reset(): void {
   stats = null;
   stopStartTs = null;
   state = 'idle';
+  clearPersistedTripState();
 }
 
 function transitionTo(newState: TripState): void {

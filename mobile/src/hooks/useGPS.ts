@@ -7,7 +7,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useVehicleStore } from '../store/vehicleStore';
 import { startLocationUpdates, stopLocationUpdates } from '../services/gpsService';
-import { onGpsUpdate, onVehicleStateUpdate, restoreTrip } from '../services/tripManager';
+import { onGpsUpdate, onVehicleStateUpdate, restoreTrip, persistTripState } from '../services/tripManager';
 import { initDatabase } from '../services/loggingService';
 import type { GPSData } from '../models/types';
 
@@ -58,13 +58,13 @@ export function useGPS(enabled: boolean) {
 
     start();
 
-    // Handle app going to background — force end trip if needed
+    // Persist trip state immediately when app goes to background
+    // so minimal data is lost if iOS kills the app
     const subscription = AppState.addEventListener(
       'change',
       (nextState: AppStateStatus) => {
-        if (nextState === 'inactive' || nextState === 'background') {
-          // Trip manager will continue via background location updates
-          // but if the app is killed, we lose in-memory state
+        if (nextState === 'background') {
+          persistTripState();
         }
       },
     );
