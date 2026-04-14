@@ -151,7 +151,7 @@ export async function initializeAdapter(): Promise<boolean> {
     dlog('OBD: Testing RPM (010C)...');
     const rpmResp = await sendCommand('010C', 3000);
     if (isNoData(rpmResp)) {
-      dlog('OBD: No RPM on auto protocol, trying ATSP6 (CAN 29-bit)...');
+      dlog('OBD: No RPM on auto protocol, trying ATSP6 (CAN 11-bit 500k)...');
       await sendCommand('ATSP6', 2000);
       const retry = await sendCommand('010C', 3000);
       if (isNoData(retry)) {
@@ -341,6 +341,9 @@ async function pollDTCs(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function pollCoolant(): Promise<void> {
+  // Direct to ECM to avoid multi-ECU response ambiguity on 7DF broadcast
+  await sendCommand('ATSH7E0', 1500);
+
   const resp = await sendCommand('0105', 2000);
   dlog(`OBD: Coolant raw: "${resp}"`);
   const bytes = parseMode01(resp, '05');
@@ -360,6 +363,10 @@ async function pollCoolant(): Promise<void> {
   } else {
     dlog(`OBD: Coolant parse FAILED for raw: "${resp}"`);
   }
+
+  // Reset header to broadcast default + flush
+  await sendCommand('ATSH7DF', 1500);
+  await sendCommand('ATAR', 1500);
 }
 
 async function pollVoltage(): Promise<void> {
