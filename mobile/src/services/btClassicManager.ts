@@ -137,7 +137,10 @@ export async function connectToDevice(deviceId: string): Promise<boolean> {
 
     dlog(`MFi: Connecting to ${deviceId}...`);
     const device = await RNBluetoothClassic.connectToDevice(deviceId, {
-      delimiter: '>',  // ELM327 prompt character
+      // Do NOT set delimiter — our onDataReceived handler detects the '>'
+      // prompt character itself. Setting delimiter here causes the library
+      // to strip '>' from the data, which breaks our prompt detection and
+      // forces every command to fall through to timeout.
     });
 
     if (!device || !(await device.isConnected())) {

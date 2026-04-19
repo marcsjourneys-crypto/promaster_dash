@@ -343,6 +343,7 @@ async function pollDTCs(): Promise<void> {
 async function pollCoolant(): Promise<void> {
   // Direct to ECM to avoid multi-ECU response ambiguity on 7DF broadcast
   await sendCommand('ATSH7E0', 1500);
+  await sleep(100); // Let adapter reconfigure CAN filter
 
   const resp = await sendCommand('0105', 2000);
   dlog(`OBD: Coolant raw: "${resp}"`);
@@ -396,6 +397,7 @@ async function pollTransTemp(): Promise<void> {
 
   // Set header for this candidate
   await sendCommand(`ATSH${transCandidate.header}`, 1500);
+  await sleep(100); // Let adapter reconfigure CAN filter
 
   const resp = await sendCommand(`22${transCandidate.did}`, 2500);
   dlog(`OBD: Trans raw: "${resp}"`);
@@ -471,6 +473,7 @@ async function pollMode22Pid(id: string): Promise<void> {
 
   // Set header
   await sendCommand(`ATSH${conv.header}`, 1500);
+  await sleep(100); // Let adapter reconfigure CAN filter
 
   const resp = await sendCommand(`22${conv.did}`, 2500);
   dlog(`OBD: ${id} raw: "${resp}"`);
