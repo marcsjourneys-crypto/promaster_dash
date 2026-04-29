@@ -1,0 +1,75 @@
+{
+  "expo": {
+    "name": "ProMaster Dash",
+    "slug": "promaster-dash",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#161410"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.promasterdash.app",
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ProMaster Dash uses your location to track trips and display speed, heading, and elevation.",
+        "NSLocationWhenInUseUsageDescription": "ProMaster Dash uses your location to display speed, heading, and elevation.",
+        "NSBluetoothAlwaysUsageDescription": "ProMaster Dash connects to your VLinker OBD2 adapter via Bluetooth to read vehicle data.",
+        "UIBackgroundModes": [
+          "location",
+          "bluetooth-central",
+          "external-accessory"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#161410",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "ProMaster Dash uses your location to track trips and display speed, heading, and elevation.",
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-sqlite",
+      [
+        "./plugins/withExternalAccessory",
+        {
+          "protocols": [
+            "com.vgatemall"
+          ]
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e704632f-cd61-44a1-a107-f225b67574f9"
+      }
+    }
+  }
+}
