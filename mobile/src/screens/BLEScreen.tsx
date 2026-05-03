@@ -155,10 +155,8 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
 
   const handleScanTrans = useCallback(async () => {
     setScanningTrans(true);
+    stopPolling();
     try {
-      // Pause normal polling during scan
-      stopPolling();
-
       const results = await scanCandidates();
       setTransResults(results);
 
@@ -173,13 +171,12 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
       } else {
         Alert.alert('No Trans Temp', 'None of the candidate DIDs returned valid data.');
       }
-
-      // Resume polling
-      startPolling();
     } catch (e: any) {
       Alert.alert('Scan Error', e.message);
+    } finally {
+      startPolling();
+      setScanningTrans(false);
     }
-    setScanningTrans(false);
   }, []);
 
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
@@ -272,7 +269,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
 
       {connected ? (
         <View style={styles.actionsRow}>
-          <Pressable style={styles.actionBtn} onPress={handleScanTrans} disabled={scanningTrans}>
+          <Pressable style={styles.actionBtn} onPress={handleScanTrans} disabled={scanningTrans || connecting}>
             {scanningTrans ? (
               <ActivityIndicator color={colors.textPrimary} />
             ) : (

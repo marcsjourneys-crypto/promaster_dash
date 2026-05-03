@@ -137,10 +137,11 @@ export async function connectToDevice(deviceId: string): Promise<boolean> {
 
     dlog(`MFi: Connecting to ${deviceId}...`);
     const device = await RNBluetoothClassic.connectToDevice(deviceId, {
-      // Do NOT set delimiter — our onDataReceived handler detects the '>'
-      // prompt character itself. Setting delimiter here causes the library
-      // to strip '>' from the data, which breaks our prompt detection and
-      // forces every command to fall through to timeout.
+      // Use '>' as delimiter so the library flushes buffered data when the
+      // ELM327 prompt arrives. The library strips '>' before delivering, so
+      // onDataReceived resolves immediately on receipt rather than scanning
+      // for the prompt character itself.
+      delimiter: '>',
     });
 
     if (!device || !(await device.isConnected())) {
@@ -215,6 +216,9 @@ export async function sendCommand(
         responseResolve = null;
         const partial = responseBuffer;
         responseBuffer = '';
+        if (partial === '') {
+          dlog(`MFi: TIMEOUT "${command}" — no data received`);
+        }
         resolve(partial);
       }, timeoutMs);
 
@@ -231,25 +235,26 @@ export async function sendCommand(
   }
 }
 
-/** Handle incoming serial data — buffer until '>' prompt. */
+/**
+ * Handle incoming serial data.
+ *
+ * With delimiter:'>' set on the connection, the library strips '>' and delivers
+ * one complete response per call — resolve immediately rather than hunting for '>'.
+ */
 function onDataReceived(data: string): void {
   responseBuffer += data;
+  dlog(`MFi raw: "${data.replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`);
 
-  if (responseBuffer.includes('>')) {
-    if (responseTimeout) {
-      clearTimeout(responseTimeout);
-      responseTimeout = null;
-    }
-    if (responseResolve) {
-      // Take everything before the first '>' as the response.
-      // Discard anything after it (stale data from previous commands).
-      const idx = responseBuffer.indexOf('>');
-      const response = responseBuffer.substring(0, idx).trim();
-      responseBuffer = '';
-      const resolve = responseResolve;
-      responseResolve = null;
-      resolve(response);
-    }
+  if (responseTimeout) {
+    clearTimeout(responseTimeout);
+    responseTimeout = null;
+  }
+  if (responseResolve) {
+    const response = responseBuffer.trim();
+    responseBuffer = '';
+    const resolve = responseResolve;
+    responseResolve = null;
+    resolve(response);
   }
 }
 

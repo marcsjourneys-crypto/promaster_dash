@@ -150,11 +150,11 @@ export async function initializeAdapter(): Promise<boolean> {
     // Test Mode 01 with RPM
     dlog('OBD: Testing RPM (010C)...');
     const rpmResp = await sendCommand('010C', 3000);
-    if (isNoData(rpmResp)) {
+    if (isNoData(rpmResp) || rpmResp === '') {
       dlog('OBD: No RPM on auto protocol, trying ATSP6 (CAN 11-bit 500k)...');
       await sendCommand('ATSP6', 2000);
       const retry = await sendCommand('010C', 3000);
-      if (isNoData(retry)) {
+      if (isNoData(retry) || retry === '') {
         dlog('OBD: No RPM response on any protocol (vehicle may be off)');
       } else {
         dlog('OBD: RPM OK on protocol 6');

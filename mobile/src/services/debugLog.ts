@@ -1,7 +1,12 @@
 /**
  * In-app debug log — a simple ring buffer of timestamped messages.
  * Subscribe from UI to show real-time scrolling log on-device.
+ * Persists to AsyncStorage so logs survive app close/reopen.
  */
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LOG_STORAGE_KEY = '@promaster/debugLog';
 
 export interface LogEntry {
   ts: number;
@@ -20,6 +25,28 @@ function formatTime(d: Date): string {
   return `${h}:${m}:${s}`;
 }
 
+// Load persisted entries on startup (fire-and-forget)
+AsyncStorage.getItem(LOG_STORAGE_KEY).then((raw) => {
+  if (!raw) return;
+  try {
+    const saved = JSON.parse(raw) as LogEntry[];
+    if (Array.isArray(saved) && saved.length > 0) {
+      entries.push(...saved.slice(-MAX_ENTRIES));
+      for (const fn of listeners) fn();
+    }
+  } catch {}
+}).catch(() => {});
+
+// Debounced persist — write at most once per second to avoid churn
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+function schedulePersist(): void {
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    AsyncStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(entries)).catch(() => {});
+  }, 1000);
+}
+
 /** Append a line to the debug log. Also forwards to console. */
 export function dlog(msg: string): void {
   const now = new Date();
@@ -27,6 +54,7 @@ export function dlog(msg: string): void {
   if (entries.length > MAX_ENTRIES) entries.shift();
   console.log(`[DBG] ${msg}`);
   for (const fn of listeners) fn();
+  schedulePersist();
 }
 
 /** Get all current log entries (newest last). */
@@ -34,9 +62,10 @@ export function getLogEntries(): LogEntry[] {
   return entries;
 }
 
-/** Clear all log entries. */
+/** Clear all log entries and erase persisted copy. */
 export function clearLog(): void {
   entries.length = 0;
+  AsyncStorage.removeItem(LOG_STORAGE_KEY).catch(() => {});
   for (const fn of listeners) fn();
 }
 

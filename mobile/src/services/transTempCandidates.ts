@@ -110,9 +110,13 @@ export async function scanCandidates(): Promise<CandidateResult[]> {
     }
   }
 
-  // Reset header to default
+  // Reset header, protocol, and timing so subsequent standard OBD polling
+  // works correctly. 29-bit header attempts (18DAxxF1) can leave the adapter
+  // in extended-CAN mode; ATSP0 forces auto re-negotiation on the next command.
   try {
     await sendCommand('ATSH7DF', 2000);
+    await sendCommand('ATSP0', 2000);
+    await sendCommand('ATAR', 2000);
   } catch {}
 
   return results;
