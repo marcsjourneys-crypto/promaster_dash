@@ -55,9 +55,37 @@ CREATE INDEX IF NOT EXISTS idx_events_trip ON events(trip_id);
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_trips_start ON trips(start_ts);
+
+CREATE TABLE IF NOT EXISTS maintenance_log (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_type TEXT    NOT NULL,
+    service_date TEXT    NOT NULL,
+    odometer     INTEGER,
+    cost         REAL,
+    notes        TEXT,
+    created_at   TEXT    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_schedule (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_type           TEXT    NOT NULL UNIQUE,
+    label                  TEXT    NOT NULL,
+    interval_months        INTEGER NOT NULL,
+    interval_months_severe INTEGER,
+    active                 INTEGER DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_mlog_type ON maintenance_log(service_type);
+CREATE INDEX IF NOT EXISTS idx_mlog_date ON maintenance_log(service_date);
 `;
 
 let db: SQLite.SQLiteDatabase | null = null;
+
+/** Expose DB instance for other services that share this database. */
+export function getDb(): SQLite.SQLiteDatabase | null {
+  return db;
+}
+
 let lastBreadcrumbTs = 0;
 const BREADCRUMB_INTERVAL = 5; // seconds
 
