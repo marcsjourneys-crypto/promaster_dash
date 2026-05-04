@@ -46,6 +46,10 @@ export interface Settings {
 
   // Enabled gauges (PID ids from pidRegistry)
   enabledPids: string[];
+
+  // Maintenance
+  severeDuty: boolean;
+  maintenanceWizardComplete: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -69,6 +73,8 @@ export const DEFAULT_SETTINGS: Settings = {
   speedUnit: 'mph',
   dataRetentionDays: 365,
   enabledPids: getDefaultEnabledPids(),
+  severeDuty: false,
+  maintenanceWizardComplete: false,
 };
 
 /** Load settings from AsyncStorage, returning defaults for missing keys. */
