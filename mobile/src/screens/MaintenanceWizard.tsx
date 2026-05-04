@@ -50,6 +50,13 @@ function toIsoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// new Date('YYYY-MM-DD') parses as midnight UTC, shifting date for non-UTC zones.
+// Parse into local-time components instead.
+function isoToLocalDate(iso: string): Date {
+  const [y, mo, d] = iso.split('-').map(Number);
+  return new Date(y, mo - 1, d);
+}
+
 function formatDisplay(iso: string): string {
   // iso is YYYY-MM-DD; display as M/D/YYYY
   const parts = iso.split('-');
@@ -80,19 +87,21 @@ export function MaintenanceWizard({ onComplete, onSkip }: Props) {
   async function handleDone() {
     await seedWizardDates(dates);
     const settings = await loadSettings();
-    await saveSettings({ ...settings, severeDuty, maintenanceWizardComplete: true });
+    const ok = await saveSettings({ ...settings, severeDuty, maintenanceWizardComplete: true });
+    if (!ok) return;
     onComplete(severeDuty);
   }
 
   async function handleSkip() {
     const settings = await loadSettings();
-    await saveSettings({ ...settings, maintenanceWizardComplete: true });
+    const ok = await saveSettings({ ...settings, maintenanceWizardComplete: true });
+    if (!ok) return;
     onSkip();
   }
 
   function openPicker(serviceType: string) {
     const existing = dates[serviceType];
-    setPickerDate(existing ? new Date(existing) : new Date());
+    setPickerDate(existing ? isoToLocalDate(existing) : new Date());
     setPickerFor(serviceType);
   }
 
@@ -391,13 +400,13 @@ const styles = StyleSheet.create({
   // ---- Navigation buttons ----
 
   nextBtn: {
+    flex: 2,
     backgroundColor: 'rgba(160, 120, 40, 0.90)',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 220, 160, 0.39)',
     paddingVertical: 14,
     alignItems: 'center',
-    marginBottom: 12,
   },
 
   nextBtnText: {
