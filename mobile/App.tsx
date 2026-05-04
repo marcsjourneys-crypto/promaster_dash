@@ -8,8 +8,10 @@ import { AlertHistoryScreen } from './src/screens/AlertHistoryScreen';
 import { DebugLogScreen } from './src/screens/DebugLogScreen';
 import { loadSettings, type Settings, DEFAULT_SETTINGS } from './src/config/settings';
 import { setEnabledPids } from './src/services/obdService';
+import { seedDefaultSchedule } from './src/services/maintenanceService';
+import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
 
-type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug';
+type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard');
@@ -21,6 +23,7 @@ export default function App() {
     loadSettings().then((s) => {
       setSettings(s);
       setEnabledPids(s.enabledPids);
+      seedDefaultSchedule().catch(() => {});
     });
   }, []);
 
@@ -67,6 +70,16 @@ export default function App() {
       )}
       {screen === 'debug' && (
         <DebugLogScreen onBack={() => setScreen('dashboard')} />
+      )}
+      {screen === 'maintenance' && (
+        <MaintenanceScreen
+          onBack={() => setScreen('dashboard')}
+          severeDuty={settings.severeDuty}
+          wizardComplete={settings.maintenanceWizardComplete}
+          onWizardComplete={() => {
+            loadSettings().then((s) => setSettings(s));
+          }}
+        />
       )}
     </>
   );
