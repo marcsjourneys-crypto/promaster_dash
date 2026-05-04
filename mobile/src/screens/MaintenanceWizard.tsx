@@ -153,7 +153,7 @@ export function MaintenanceWizard({ onComplete, onSkip }: Props) {
           <View style={styles.choiceRow}>
             <Pressable
               style={[styles.choiceBtn, severeDuty && styles.choiceBtnActive]}
-              onPress={() => setSevereDuty(true)}
+              onPress={() => { setSevereDuty(true); setStep(2); }}
             >
               <Text style={[styles.choiceBtnText, severeDuty && styles.choiceBtnTextActive]}>
                 YES — Severe Duty
@@ -162,17 +162,13 @@ export function MaintenanceWizard({ onComplete, onSkip }: Props) {
 
             <Pressable
               style={[styles.choiceBtn, !severeDuty && styles.choiceBtnActive]}
-              onPress={() => setSevereDuty(false)}
+              onPress={() => { setSevereDuty(false); setStep(2); }}
             >
               <Text style={[styles.choiceBtnText, !severeDuty && styles.choiceBtnTextActive]}>
                 NO — Normal Use
               </Text>
             </Pressable>
           </View>
-
-          <Pressable style={styles.nextBtn} onPress={() => setStep(2)}>
-            <Text style={styles.nextBtnText}>NEXT</Text>
-          </Pressable>
 
           <Pressable style={styles.skipLink} onPress={handleSkip}>
             <Text style={styles.skipLinkText}>Skip setup</Text>
