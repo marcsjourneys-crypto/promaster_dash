@@ -28,15 +28,16 @@ import {
 import { cleanupOldTrips } from '../services/loggingService';
 import { useVehicleStore } from '../store/vehicleStore';
 
-type Tab = 'thresholds' | 'trip' | 'display' | 'gauges' | 'data';
+type Tab = 'thresholds' | 'trip' | 'display' | 'gauges' | 'data' | 'vehicle';
 
 interface SettingsScreenProps {
   onBack: () => void;
   liveMode: boolean;
   onLiveModeChange: (live: boolean) => void;
+  onNavigate?: (screen: string) => void;
 }
 
-export function SettingsScreen({ onBack, liveMode, onLiveModeChange }: SettingsScreenProps) {
+export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate }: SettingsScreenProps) {
   const [settings, setSettings] = useState<Settings>({ ...DEFAULT_SETTINGS });
   const [activeTab, setActiveTab] = useState<Tab>('gauges');
   const [modified, setModified] = useState(false);
@@ -115,7 +116,7 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange }: SettingsS
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {(['gauges', 'thresholds', 'trip', 'display', 'data'] as Tab[]).map((tab) => (
+        {(['gauges', 'thresholds', 'trip', 'display', 'vehicle', 'data'] as Tab[]).map((tab) => (
           <Pressable
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
@@ -361,6 +362,26 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange }: SettingsS
           </>
         )}
 
+        {activeTab === 'vehicle' && (
+          <ScrollView style={styles.tabContent}>
+            <Text style={styles.sectionHeader}>DUTY CYCLE</Text>
+            <View style={styles.row}>
+              <View style={styles.rowLabel}>
+                <Text style={styles.label}>Severe Duty</Text>
+                <Text style={styles.hint}>
+                  Heavy hauling / camper use. Halves all maintenance intervals.
+                </Text>
+              </View>
+              <Switch
+                value={settings.severeDuty}
+                onValueChange={(v) => update('severeDuty', v)}
+                trackColor={{ false: colors.bgCard, true: colors.amber }}
+                thumbColor={colors.textPrimary}
+              />
+            </View>
+          </ScrollView>
+        )}
+
         {activeTab === 'data' && (
           <>
             <Text style={styles.sectionHeader}>DATA MANAGEMENT</Text>
@@ -372,6 +393,9 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange }: SettingsS
             <View style={styles.dataActions}>
               <Pressable style={styles.dataBtn} onPress={handleCleanup}>
                 <Text style={styles.dataBtnText}>CLEANUP OLD TRIPS</Text>
+              </Pressable>
+              <Pressable style={styles.dataBtn} onPress={() => onNavigate?.('debug')}>
+                <Text style={styles.dataBtnText}>VIEW DEBUG LOG</Text>
               </Pressable>
             </View>
           </>
@@ -463,6 +487,16 @@ const styles = StyleSheet.create({
   },
   unitBtnText: { color: colors.textMuted, fontSize: fonts.sizeSm, fontWeight: '800' },
   unitBtnTextActive: { color: colors.amber },
+  tabContent: { flex: 1 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  rowLabel: { flex: 1, marginRight: 12 },
+  label: { color: 'rgba(220, 210, 195, 0.94)', fontSize: fonts.sizeSm, fontWeight: '700' },
+  hint: { color: 'rgba(150, 145, 135, 0.78)', fontSize: fonts.sizeXs, marginTop: 2 },
   dataActions: { marginTop: 20, gap: 10 },
   dataBtn: {
     backgroundColor: 'rgba(45, 42, 36, 0.90)',

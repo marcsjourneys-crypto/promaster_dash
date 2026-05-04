@@ -63,6 +63,7 @@ export default function App() {
           onBack={handleSettingsBack}
           liveMode={liveMode}
           onLiveModeChange={setLiveMode}
+          onNavigate={handleNavigate}
         />
       )}
       {screen === 'alerts' && (
