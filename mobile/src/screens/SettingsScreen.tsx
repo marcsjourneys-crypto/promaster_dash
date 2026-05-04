@@ -363,23 +363,23 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
         )}
 
         {activeTab === 'vehicle' && (
-          <ScrollView style={styles.tabContent}>
+          <>
             <Text style={styles.sectionHeader}>DUTY CYCLE</Text>
-            <View style={styles.row}>
-              <View style={styles.rowLabel}>
-                <Text style={styles.label}>Severe Duty</Text>
-                <Text style={styles.hint}>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchLabel}>Severe Duty</Text>
+                <Text style={styles.switchHint}>
                   Heavy hauling / camper use. Halves all maintenance intervals.
                 </Text>
               </View>
               <Switch
                 value={settings.severeDuty}
                 onValueChange={(v) => update('severeDuty', v)}
-                trackColor={{ false: colors.bgCard, true: colors.amber }}
-                thumbColor={colors.textPrimary}
+                trackColor={{ false: 'rgba(60, 55, 45, 1)', true: 'rgba(180, 130, 50, 0.6)' }}
+                thumbColor={settings.severeDuty ? colors.amber : 'rgba(150, 140, 120, 1)'}
               />
             </View>
-          </ScrollView>
+          </>
         )}
 
         {activeTab === 'data' && (
@@ -487,16 +487,6 @@ const styles = StyleSheet.create({
   },
   unitBtnText: { color: colors.textMuted, fontSize: fonts.sizeSm, fontWeight: '800' },
   unitBtnTextActive: { color: colors.amber },
-  tabContent: { flex: 1 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  rowLabel: { flex: 1, marginRight: 12 },
-  label: { color: 'rgba(220, 210, 195, 0.94)', fontSize: fonts.sizeSm, fontWeight: '700' },
-  hint: { color: 'rgba(150, 145, 135, 0.78)', fontSize: fonts.sizeXs, marginTop: 2 },
   dataActions: { marginTop: 20, gap: 10 },
   dataBtn: {
     backgroundColor: 'rgba(45, 42, 36, 0.90)',
