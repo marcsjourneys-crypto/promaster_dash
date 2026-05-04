@@ -13,6 +13,7 @@ import {
   Platform,
   SafeAreaView,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { colors, fonts } from '../config/theme';
@@ -158,6 +159,7 @@ export function MaintenanceScreen({ onBack, severeDuty, wizardComplete, onWizard
   const [schedule, setSchedule] = useState<ScheduleRow[]>([]);
   const [history, setHistory] = useState<LogEntry[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Log entry form state
   const [selectedType, setSelectedType] = useState(SERVICE_TYPES[0].value);
@@ -244,17 +246,27 @@ export function MaintenanceScreen({ onBack, severeDuty, wizardComplete, onWizard
   }
 
   async function handleSave() {
-    const odomNum = odometer.trim() ? parseFloat(odometer) : undefined;
-    const costNum = cost.trim() ? parseFloat(cost) : undefined;
-    await addLogEntry({
-      service_type: selectedType,
-      service_date: entryDateStr,
-      odometer: !isNaN(odomNum ?? NaN) ? odomNum : undefined,
-      cost: !isNaN(costNum ?? NaN) ? costNum : undefined,
-      notes: notes.trim() || undefined,
-    });
-    closeModal();
-    await refresh();
+    if (saving) return;
+    setSaving(true);
+    try {
+      const odomNum = odometer.trim() ? parseFloat(odometer) : undefined;
+      const costNum = cost.trim() ? parseFloat(cost) : undefined;
+      const id = await addLogEntry({
+        service_type: selectedType,
+        service_date: entryDateStr,
+        odometer: !isNaN(odomNum ?? NaN) ? odomNum : undefined,
+        cost: !isNaN(costNum ?? NaN) ? costNum : undefined,
+        notes: notes.trim() || undefined,
+      });
+      if (id === null) {
+        Alert.alert('Save Failed', 'Could not save the entry. Please try again.');
+        return;
+      }
+      closeModal();
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -296,6 +308,13 @@ export function MaintenanceScreen({ onBack, severeDuty, wizardComplete, onWizard
             renderItem={({ item }) => <ScheduleItem row={item} />}
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  No schedule items found. Tap + to log your first service.
+                </Text>
+              </View>
+            }
           />
         )}
 
@@ -434,8 +453,8 @@ export function MaintenanceScreen({ onBack, severeDuty, wizardComplete, onWizard
                 <Pressable style={styles.cancelBtn} onPress={closeModal}>
                   <Text style={styles.cancelBtnText}>CANCEL</Text>
                 </Pressable>
-                <Pressable style={styles.saveBtn} onPress={handleSave}>
-                  <Text style={styles.saveBtnText}>SAVE</Text>
+                <Pressable style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSave} disabled={saving}>
+                  <Text style={styles.saveBtnText}>{saving ? 'SAVING…' : 'SAVE'}</Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -868,6 +887,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 220, 160, 0.39)',
     backgroundColor: 'rgba(160, 120, 40, 0.90)',
     alignItems: 'center',
+  },
+  saveBtnDisabled: {
+    opacity: 0.45,
   },
 
   saveBtnText: {

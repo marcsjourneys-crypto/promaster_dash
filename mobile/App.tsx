@@ -77,7 +77,8 @@ export default function App() {
           onBack={() => setScreen('dashboard')}
           severeDuty={settings.severeDuty}
           wizardComplete={settings.maintenanceWizardComplete}
-          onWizardComplete={() => {
+          onWizardComplete={(duty) => {
+            setSettings((prev) => ({ ...prev, severeDuty: duty, maintenanceWizardComplete: true }));
             loadSettings().then((s) => setSettings(s));
           }}
         />
