@@ -174,8 +174,8 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
         <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('ble')}>
           <Text style={styles.actionBtnText}>SCAN CODES</Text>
         </Pressable>
-        <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('debug')}>
-          <Text style={styles.actionBtnText}>LOG</Text>
+        <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('maintenance')}>
+          <Text style={styles.actionBtnText}>MAINT LOG</Text>
         </Pressable>
       </View>
     </SafeAreaView>
