@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { AppSplash } from './src/screens/AppSplash';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { TripsScreen } from './src/screens/TripsScreen';
 import { BLEScreen } from './src/screens/BLEScreen';
@@ -16,12 +17,15 @@ type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard');
-  const [liveMode, setLiveMode] = useState(false);
+  const [liveMode, setLiveMode] = useState(true);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [dbReady, setDbReady] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
 
   // Load settings on startup and sync enabled PIDs to OBD service
   useEffect(() => {
     initDatabase().then(() => {
+      setDbReady(true);
       seedDefaultSchedule().catch(() => {});
     });
     loadSettings().then((s) => {
@@ -48,6 +52,9 @@ export default function App() {
   return (
     <>
       <StatusBar style="light" />
+      {!splashDone && (
+        <AppSplash dbReady={dbReady} onReady={() => setSplashDone(true)} />
+      )}
       {screen === 'dashboard' && (
         <DashboardScreen
           onNavigate={handleNavigate}

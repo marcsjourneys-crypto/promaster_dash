@@ -41,7 +41,8 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
   const [settings, setSettings] = useState<Settings>({ ...DEFAULT_SETTINGS });
   const [activeTab, setActiveTab] = useState<Tab>('gauges');
   const [modified, setModified] = useState(false);
-  const { gpsOk, dtcCount } = useVehicleStore((s) => ({ gpsOk: s.gpsOk, dtcCount: s.dtcCount }));
+  const gpsOk = useVehicleStore((s) => s.gpsOk);
+  const dtcCount = useVehicleStore((s) => s.dtcCount);
 
   useEffect(() => {
     loadSettings().then(setSettings);
