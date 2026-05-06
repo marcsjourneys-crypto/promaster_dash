@@ -4,10 +4,10 @@
     "slug": "promaster-dash",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/PD.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/PD.png",
       "resizeMode": "contain",
       "backgroundColor": "#161410"
     },
