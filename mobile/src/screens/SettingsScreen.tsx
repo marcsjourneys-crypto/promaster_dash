@@ -41,7 +41,7 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
   const [settings, setSettings] = useState<Settings>({ ...DEFAULT_SETTINGS });
   const [activeTab, setActiveTab] = useState<Tab>('gauges');
   const [modified, setModified] = useState(false);
-  const toggleNightMode = useVehicleStore((s) => s.toggleNightMode);
+  const { gpsOk, dtcCount } = useVehicleStore((s) => ({ gpsOk: s.gpsOk, dtcCount: s.dtcCount }));
 
   useEffect(() => {
     loadSettings().then(setSettings);
@@ -349,16 +349,6 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
               </View>
             </View>
 
-            <Text style={[styles.sectionHeader, { marginTop: 20 }]}>DISPLAY</Text>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Start in Night Mode</Text>
-              <Switch
-                value={settings.startNightMode}
-                onValueChange={(v) => update('startNightMode', v)}
-                trackColor={{ false: 'rgba(60, 55, 45, 1)', true: 'rgba(180, 130, 50, 0.6)' }}
-                thumbColor={settings.startNightMode ? colors.amber : 'rgba(150, 140, 120, 1)'}
-              />
-            </View>
           </>
         )}
 
@@ -384,7 +374,21 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
 
         {activeTab === 'data' && (
           <>
-            <Text style={styles.sectionHeader}>DATA MANAGEMENT</Text>
+            <Text style={styles.sectionHeader}>CONNECTION STATUS</Text>
+            <View style={styles.statusRow}>
+              <Text style={styles.switchLabel}>GPS</Text>
+              <Text style={[styles.statusValue, { color: gpsOk ? '#50a050' : colors.textMuted }]}>
+                {gpsOk ? 'OK' : 'NO SIGNAL'}
+              </Text>
+            </View>
+            <View style={styles.statusRow}>
+              <Text style={styles.switchLabel}>CHECK ENGINE</Text>
+              <Text style={[styles.statusValue, { color: dtcCount > 0 ? '#e05050' : '#50a050' }]}>
+                {dtcCount > 0 ? `${dtcCount} CODE${dtcCount > 1 ? 'S' : ''}` : 'OK'}
+              </Text>
+            </View>
+
+            <Text style={[styles.sectionHeader, { marginTop: 20 }]}>DATA MANAGEMENT</Text>
             <ValueStepper
               label="Data Retention"
               min={30} max={730} value={settings.dataRetentionDays} suffix=" days"
@@ -487,6 +491,8 @@ const styles = StyleSheet.create({
   },
   unitBtnText: { color: colors.textMuted, fontSize: fonts.sizeSm, fontWeight: '800' },
   unitBtnTextActive: { color: colors.amber },
+  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
+  statusValue: { fontSize: fonts.sizeSm, fontWeight: '700' },
   dataActions: { marginTop: 20, gap: 10 },
   dataBtn: {
     backgroundColor: 'rgba(45, 42, 36, 0.90)',

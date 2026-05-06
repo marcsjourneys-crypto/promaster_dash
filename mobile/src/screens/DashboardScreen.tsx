@@ -63,10 +63,10 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
   const store = useVehicleStore();
   const {
     rpm, speedMph,
-    gpsOk, headingDeg, elevationFt, gradePct, climbing,
+    headingDeg, elevationFt, gradePct, climbing,
     tripActive, tripStartTs, tripDistanceMi,
-    dtcCount, alertMessage, alertPriority,
-    nightMode, bleConnected, toggleNightMode,
+    alertMessage, alertPriority,
+    bleConnected,
   } = store;
 
   // Force re-render for trip timer
@@ -96,8 +96,6 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
       <View style={styles.statusBar}>
         <StatusPill label="TRIP" value={tripActive ? formatTripTime(tripStartTs) : '--:--:--'} />
         <StatusPill label="" value={headingStr} large />
-        <StatusPill label="GPS" value={gpsOk ? 'OK' : '--'} />
-        <StatusPill label="CEL" value={dtcCount > 0 ? dtcCount.toString() : 'OK'} danger={dtcCount > 0} />
       </View>
 
       <View style={styles.statusBar}>
@@ -105,9 +103,6 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
         <StatusPill label="GRADE" value={gradeStr} />
         <Pressable onPress={() => onNavigate?.('ble')}>
           <StatusPill label="BLE" value={bleConnected ? 'ON' : '--'} />
-        </Pressable>
-        <Pressable style={styles.iconBtn} onPress={toggleNightMode}>
-          <Text style={styles.iconBtnText}>{nightMode ? 'DAY' : 'NIT'}</Text>
         </Pressable>
         <Pressable style={styles.iconBtn} onPress={() => onNavigate?.('settings')}>
           <Text style={styles.iconBtnText}>{'\u2699'}</Text>

@@ -10,6 +10,7 @@ import { loadSettings, type Settings, DEFAULT_SETTINGS } from './src/config/sett
 import { setEnabledPids } from './src/services/obdService';
 import { seedDefaultSchedule } from './src/services/maintenanceService';
 import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
+import { initDatabase } from './src/services/loggingService';
 
 type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance';
 
@@ -20,10 +21,12 @@ export default function App() {
 
   // Load settings on startup and sync enabled PIDs to OBD service
   useEffect(() => {
+    initDatabase().then(() => {
+      seedDefaultSchedule().catch(() => {});
+    });
     loadSettings().then((s) => {
       setSettings(s);
       setEnabledPids(s.enabledPids);
-      seedDefaultSchedule().catch(() => {});
     });
   }, []);
 
