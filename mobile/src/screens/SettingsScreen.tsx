@@ -110,7 +110,7 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={handleSave}>
-          <Text style={styles.backBtnText}>\u2190 Save</Text>
+          <Text style={styles.backBtnText}>{'\u2190'} Save</Text>
         </Pressable>
         <Text style={styles.title}>SETTINGS</Text>
       </View>
@@ -169,12 +169,12 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
                 <Text style={styles.sectionHeader}>TRANS TEMP</Text>
                 <ValueStepper
                   label="Warning"
-                  min={200} max={260} value={settings.transWarnF} suffix="\u00b0F"
+                  min={200} max={260} value={settings.transWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('transWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={220} max={280} value={settings.transCritF} suffix="\u00b0F"
+                  min={220} max={280} value={settings.transCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('transCritF', v)}
                 />
               </>
@@ -185,12 +185,12 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>COOLANT TEMP</Text>
                 <ValueStepper
                   label="Warning"
-                  min={200} max={240} value={settings.coolantWarnF} suffix="\u00b0F"
+                  min={200} max={240} value={settings.coolantWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('coolantWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={210} max={250} value={settings.coolantCritF} suffix="\u00b0F"
+                  min={210} max={250} value={settings.coolantCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('coolantCritF', v)}
                 />
               </>
@@ -233,12 +233,12 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>OIL TEMP</Text>
                 <ValueStepper
                   label="Warning"
-                  min={220} max={270} value={settings.oilTempWarnF} suffix="\u00b0F"
+                  min={220} max={270} value={settings.oilTempWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('oilTempWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={240} max={300} value={settings.oilTempCritF} suffix="\u00b0F"
+                  min={240} max={300} value={settings.oilTempCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('oilTempCritF', v)}
                 />
               </>
@@ -249,12 +249,12 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>INTAKE AIR TEMP</Text>
                 <ValueStepper
                   label="Warning"
-                  min={140} max={180} value={settings.intakeAirWarnF} suffix="\u00b0F"
+                  min={140} max={180} value={settings.intakeAirWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('intakeAirWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={160} max={200} value={settings.intakeAirCritF} suffix="\u00b0F"
+                  min={160} max={200} value={settings.intakeAirCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('intakeAirCritF', v)}
                 />
               </>
@@ -322,13 +322,13 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
                   style={[styles.unitBtn, settings.tempUnit === 'F' && styles.unitBtnActive]}
                   onPress={() => update('tempUnit', 'F' as any)}
                 >
-                  <Text style={[styles.unitBtnText, settings.tempUnit === 'F' && styles.unitBtnTextActive]}>\u00b0F</Text>
+                  <Text style={[styles.unitBtnText, settings.tempUnit === 'F' && styles.unitBtnTextActive]}>{'\u00b0F'}</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.unitBtn, settings.tempUnit === 'C' && styles.unitBtnActive]}
                   onPress={() => update('tempUnit', 'C' as any)}
                 >
-                  <Text style={[styles.unitBtnText, settings.tempUnit === 'C' && styles.unitBtnTextActive]}>\u00b0C</Text>
+                  <Text style={[styles.unitBtnText, settings.tempUnit === 'C' && styles.unitBtnTextActive]}>{'\u00b0C'}</Text>
                 </Pressable>
               </View>
             </View>
