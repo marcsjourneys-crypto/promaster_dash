@@ -12,6 +12,7 @@ import { setEnabledPids } from './src/services/obdService';
 import { seedDefaultSchedule } from './src/services/maintenanceService';
 import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
 import { initDatabase } from './src/services/loggingService';
+import { restoreTrip, tickWatchdog } from './src/services/tripManager';
 
 type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance';
 
@@ -24,14 +25,23 @@ export default function App() {
 
   // Load settings on startup and sync enabled PIDs to OBD service
   useEffect(() => {
-    initDatabase().then(() => {
+    let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+
+    initDatabase().then(async () => {
+      await restoreTrip();
       setDbReady(true);
       seedDefaultSchedule().catch(() => {});
+      watchdogTimer = setInterval(() => tickWatchdog(), 60_000);
     });
+
     loadSettings().then((s) => {
       setSettings(s);
       setEnabledPids(s.enabledPids);
     });
+
+    return () => {
+      if (watchdogTimer) clearInterval(watchdogTimer);
+    };
   }, []);
 
   const handleNavigate = useCallback((s: string) => {
