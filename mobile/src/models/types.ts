@@ -47,6 +47,7 @@ export interface TripRow {
   transWarnSecs: number;
   coolantWarnSecs: number;
   avgSpeedMph: number;
+  name?: string | null;
 }
 
 /** Threshold constants for gauges and alerts. */
