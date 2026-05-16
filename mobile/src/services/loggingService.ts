@@ -101,7 +101,9 @@ export async function initDatabase(): Promise<boolean> {
     try {
       await db.execAsync('ALTER TABLE trips ADD COLUMN name TEXT');
     } catch (_) {}
-    await repairUnfinalizedTrips();
+    try {
+      await repairUnfinalizedTrips();
+    } catch (_) {}
     return true;
   } catch (e) {
     console.warn('Database init failed:', e);
