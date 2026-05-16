@@ -106,23 +106,9 @@ export async function restoreTrip(): Promise<boolean> {
     const data: PersistedTripState = JSON.parse(raw);
 
     // Discard trips older than 24 hours — clearly not an ongoing drive.
-    // Finalize first so breadcrumb-based repair in initDatabase picks up the rest.
     const ageHours = (Date.now() / 1000 - data.startTs) / 3600;
     if (ageHours > 24) {
-      dlog(`Trip: Persisted trip is ${ageHours.toFixed(0)}h old, finalizing and discarding`);
-      // Build a minimal TripStats so finalizeTrip records what we persisted
-      const oldStats = new TripStats();
-      oldStats.tripId = data.tripId;
-      oldStats.startTs = data.startTs;
-      oldStats.endTs = Date.now() / 1000;
-      oldStats.distanceMi = data.distanceMi;
-      oldStats.maxTransF = data.maxTransF;
-      oldStats.maxCoolantF = data.maxCoolantF;
-      oldStats.transWarnSecs = data.transWarnSecs;
-      oldStats.coolantWarnSecs = data.coolantWarnSecs;
-      oldStats.speedSamples = data.speedSamples;
-      oldStats.speedSum = data.speedSum;
-      await finalizeTrip(data.tripId, oldStats);
+      dlog(`Trip: Persisted trip is ${ageHours.toFixed(0)}h old, discarding`);
       await clearPersistedTripState();
       return false;
     }
