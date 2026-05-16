@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { colors, fonts } from '../config/theme';
 import type { TripRow } from '../models/types';
-import { getRecentTrips, deleteTrip, getTripBreadcrumbs } from '../services/loggingService';
+import { getRecentTrips, deleteTrip, getTripBreadcrumbs, renameTripEntry } from '../services/loggingService';
 import { exportAndShare } from '../services/gpxExport';
 import { TripChart } from '../components/TripChart';
 
@@ -46,60 +46,72 @@ function TripItem({
   onToggle,
   onDelete,
   onExport,
+  onRename,
 }: {
   trip: TripRow;
   expanded: boolean;
   onToggle: (id: number) => void;
   onDelete: (id: number) => void;
   onExport: (trip: TripRow) => void;
+  onRename: (trip: TripRow) => void;
 }) {
   return (
     <View style={styles.tripCard}>
-      <Pressable onPress={() => onToggle(trip.id)}>
+      {/* Header: name/date taps to rename, chevron indicates expand state */}
       <View style={styles.tripHeader}>
-        <Text style={styles.tripDate}>{formatDate(trip.startTs)}</Text>
+        <Pressable onPress={() => onRename(trip)}>
+          {trip.name ? (
+            <>
+              <Text style={styles.tripName}>{trip.name}</Text>
+              <Text style={styles.tripDate}>{formatDate(trip.startTs)}</Text>
+            </>
+          ) : (
+            <Text style={styles.tripDate}>{formatDate(trip.startTs)}</Text>
+          )}
+        </Pressable>
         <View style={styles.tripHeaderRight}>
           <Text style={styles.tripDistance}>{trip.distanceMi.toFixed(1)} mi</Text>
           <Text style={styles.chevron}>{expanded ? '▲' : '▼'}</Text>
         </View>
       </View>
 
-      <View style={styles.tripStats}>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Duration</Text>
-          <Text style={styles.statValue}>{formatDuration(trip.durationSecs)}</Text>
+      {/* Stats area: tap to expand/collapse */}
+      <Pressable onPress={() => onToggle(trip.id)}>
+        <View style={styles.tripStats}>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Duration</Text>
+            <Text style={styles.statValue}>{formatDuration(trip.durationSecs)}</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Avg Speed</Text>
+            <Text style={styles.statValue}>
+              {trip.avgSpeedMph > 0 ? `${trip.avgSpeedMph.toFixed(0)} mph` : '--'}
+            </Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Max Trans</Text>
+            <Text
+              style={[
+                styles.statValue,
+                trip.maxTransF !== null && trip.maxTransF >= 230 && styles.statWarn,
+              ]}
+            >
+              {trip.maxTransF !== null ? `${trip.maxTransF.toFixed(0)}°F` : '--'}
+            </Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Max Cool</Text>
+            <Text style={styles.statValue}>
+              {trip.maxCoolantF !== null ? `${trip.maxCoolantF.toFixed(0)}°F` : '--'}
+            </Text>
+          </View>
         </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Avg Speed</Text>
-          <Text style={styles.statValue}>
-            {trip.avgSpeedMph > 0 ? `${trip.avgSpeedMph.toFixed(0)} mph` : '--'}
-          </Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Max Trans</Text>
-          <Text
-            style={[
-              styles.statValue,
-              trip.maxTransF !== null && trip.maxTransF >= 230 && styles.statWarn,
-            ]}
-          >
-            {trip.maxTransF !== null ? `${trip.maxTransF.toFixed(0)}°F` : '--'}
-          </Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>Max Cool</Text>
-          <Text style={styles.statValue}>
-            {trip.maxCoolantF !== null ? `${trip.maxCoolantF.toFixed(0)}°F` : '--'}
-          </Text>
-        </View>
-      </View>
 
-      {(trip.transWarnSecs > 0 || trip.coolantWarnSecs > 0) && (
-        <Text style={styles.warnBadge}>
-          Temp warnings: {formatDuration(trip.transWarnSecs + trip.coolantWarnSecs)}
-        </Text>
-      )}
-
+        {(trip.transWarnSecs > 0 || trip.coolantWarnSecs > 0) && (
+          <Text style={styles.warnBadge}>
+            Temp warnings: {formatDuration(trip.transWarnSecs + trip.coolantWarnSecs)}
+          </Text>
+        )}
       </Pressable>
 
       {expanded && <TripChart tripId={trip.id} />}
@@ -165,6 +177,20 @@ export function TripsScreen({ onBack }: TripsScreenProps) {
     await exportAndShare(breadcrumbs, trip.id, trip.startTs);
   }, []);
 
+  const handleRename = useCallback((trip: TripRow) => {
+    Alert.prompt(
+      'Name This Trip',
+      'e.g. Colorado to Washington',
+      (text) => {
+        if (text !== undefined) {
+          renameTripEntry(trip.id, text).then(() => loadTrips());
+        }
+      },
+      'plain-text',
+      trip.name ?? '',
+    );
+  }, [loadTrips]);
+
   // Compute summary stats
   const totalMiles = trips.reduce((sum, t) => sum + t.distanceMi, 0);
   const totalTrips = trips.length;
@@ -196,6 +222,7 @@ export function TripsScreen({ onBack }: TripsScreenProps) {
             onToggle={handleToggle}
             onDelete={handleDelete}
             onExport={handleExport}
+            onRename={handleRename}
           />
         )}
         ListEmptyComponent={
@@ -271,6 +298,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  tripName: {
+    color: colors.amber,
+    fontSize: fonts.sizeMd,
+    fontWeight: '900',
+    marginBottom: 2,
   },
   tripDate: {
     color: colors.textPrimary,
