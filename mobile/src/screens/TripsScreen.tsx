@@ -178,6 +178,7 @@ export function TripsScreen({ onBack }: TripsScreenProps) {
   }, []);
 
   const handleRename = useCallback((trip: TripRow) => {
+    // Alert.prompt is iOS-only; on Android this is a no-op
     Alert.prompt(
       'Name This Trip',
       'e.g. Colorado to Washington',

@@ -334,7 +334,7 @@ export function tickWatchdog(): void {
   const now = Date.now() / 1000;
   if (lastUpdateTs > 0 && now - lastUpdateTs > WATCHDOG_STALE_SECS) {
     dlog(`Trip: Watchdog ending stale trip (no GPS for ${((now - lastUpdateTs) / 60).toFixed(0)} min)`);
-    forceEndTrip();
+    void forceEndTrip();
   }
 }
 
