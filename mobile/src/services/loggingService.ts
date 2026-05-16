@@ -3,6 +3,7 @@
 import * as SQLite from 'expo-sqlite';
 import type { BreadcrumbRecord, EventRecord, TripRow } from '../models/types';
 import type { TripStats } from '../models/TripStats';
+import { haversineMiles } from '../utils/geo';
 
 const DB_NAME = 'promaster_dash.db';
 
@@ -96,10 +97,85 @@ export async function initDatabase(): Promise<boolean> {
     await db.execAsync('PRAGMA foreign_keys = ON;');
     await db.execAsync('PRAGMA journal_mode = WAL;');
     await db.execAsync(SCHEMA);
+    // Add name column if it doesn't exist (safe migration — fails silently if already present)
+    try {
+      await db.execAsync('ALTER TABLE trips ADD COLUMN name TEXT');
+    } catch (_) {}
+    await repairUnfinalizedTrips();
     return true;
   } catch (e) {
     console.warn('Database init failed:', e);
     return false;
+  }
+}
+
+/**
+ * Repair trips that were never finalized (app killed mid-trip).
+ * Computes duration, distance, avg speed, and max temps from breadcrumbs.
+ * Only touches trips older than 2 hours to avoid the current active trip.
+ */
+export async function repairUnfinalizedTrips(): Promise<void> {
+  if (!db) return;
+
+  const cutoff = Date.now() / 1000 - 7200;
+  const tripIds = await db.getAllAsync<{ id: number }>(
+    `SELECT id FROM trips WHERE end_ts IS NULL AND start_ts < ?`,
+    cutoff,
+  );
+
+  if (tripIds.length === 0) return;
+
+  for (const { id } of tripIds) {
+    const agg = await db.getFirstAsync<{
+      first_ts: number;
+      last_ts: number;
+      avg_speed: number | null;
+      max_trans: number | null;
+      max_coolant: number | null;
+      count: number;
+    }>(
+      `SELECT MIN(ts) as first_ts, MAX(ts) as last_ts,
+              AVG(CASE WHEN speed_mph >= 0 THEN speed_mph END) as avg_speed,
+              MAX(trans_f) as max_trans, MAX(coolant_f) as max_coolant,
+              COUNT(*) as count
+       FROM breadcrumbs WHERE trip_id = ?`,
+      id,
+    );
+
+    if (!agg || agg.count === 0) {
+      // No breadcrumbs — mark as a zero-length trip so it stops showing as active
+      await db.runAsync(`UPDATE trips SET end_ts = start_ts WHERE id = ?`, id);
+      continue;
+    }
+
+    // Compute distance from breadcrumb positions
+    const crumbs = await db.getAllAsync<{ lat: number; lon: number }>(
+      `SELECT lat, lon FROM breadcrumbs WHERE trip_id = ? ORDER BY ts`,
+      id,
+    );
+
+    let distanceMi = 0;
+    for (let i = 1; i < crumbs.length; i++) {
+      const d = haversineMiles(
+        crumbs[i - 1].lat, crumbs[i - 1].lon,
+        crumbs[i].lat, crumbs[i].lon,
+      );
+      if (d < 0.5) distanceMi += d;
+    }
+
+    await db.runAsync(
+      `UPDATE trips SET
+         end_ts = ?, duration_secs = ?, avg_speed_mph = ?,
+         max_trans_f = ?, max_coolant_f = ?, distance_mi = ?
+       WHERE id = ?`,
+      agg.last_ts,
+      agg.last_ts - agg.first_ts,
+      agg.avg_speed ?? 0,
+      agg.max_trans,
+      agg.max_coolant,
+      distanceMi,
+      id,
+    );
   }
 }
 
@@ -255,9 +331,10 @@ export async function getRecentTrips(limit = 20): Promise<TripRow[]> {
       trans_warn_secs: number;
       coolant_warn_secs: number;
       avg_speed_mph: number;
+      name: string | null;
     }>(
       `SELECT id, start_ts, end_ts, distance_mi, duration_secs,
-              max_trans_f, max_coolant_f, trans_warn_secs, coolant_warn_secs, avg_speed_mph
+              max_trans_f, max_coolant_f, trans_warn_secs, coolant_warn_secs, avg_speed_mph, name
        FROM trips ORDER BY start_ts DESC LIMIT ?`,
       limit,
     );
@@ -272,6 +349,7 @@ export async function getRecentTrips(limit = 20): Promise<TripRow[]> {
       transWarnSecs: r.trans_warn_secs,
       coolantWarnSecs: r.coolant_warn_secs,
       avgSpeedMph: r.avg_speed_mph,
+      name: r.name,
     }));
   } catch (e) {
     console.warn('Get trips failed:', e);
@@ -364,6 +442,18 @@ export async function deleteTrip(tripId: number): Promise<boolean> {
     return true;
   } catch (e) {
     console.warn('Delete trip failed:', e);
+    return false;
+  }
+}
+
+/** Set or update a trip's user-defined name. */
+export async function renameTripEntry(tripId: number, name: string): Promise<boolean> {
+  if (!db) return false;
+  try {
+    await db.runAsync('UPDATE trips SET name = ? WHERE id = ?', name.trim() || null, tripId);
+    return true;
+  } catch (e) {
+    console.warn('Rename trip failed:', e);
     return false;
   }
 }
