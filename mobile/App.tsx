@@ -31,7 +31,9 @@ export default function App() {
       await restoreTrip();
       setDbReady(true);
       seedDefaultSchedule().catch(() => {});
-      watchdogTimer = setInterval(() => tickWatchdog(), 60_000);
+      watchdogTimer = setInterval(tickWatchdog, 60_000);
+    }).catch(() => {
+      setDbReady(true);
     });
 
     loadSettings().then((s) => {
