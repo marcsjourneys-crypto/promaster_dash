@@ -323,6 +323,21 @@ export function reset(): void {
   clearPersistedTripState();
 }
 
+const WATCHDOG_STALE_SECS = 900; // 15 minutes
+
+/**
+ * Call on a ~60s interval. If a trip is active but GPS has gone silent
+ * for 15+ minutes, force-end it so duration doesn't grow unbounded.
+ */
+export function tickWatchdog(): void {
+  if (state === 'idle') return;
+  const now = Date.now() / 1000;
+  if (lastUpdateTs > 0 && now - lastUpdateTs > WATCHDOG_STALE_SECS) {
+    dlog(`Trip: Watchdog ending stale trip (no GPS for ${((now - lastUpdateTs) / 60).toFixed(0)} min)`);
+    forceEndTrip();
+  }
+}
+
 function transitionTo(newState: TripState): void {
   state = newState;
 }
