@@ -12,6 +12,7 @@ import { useMockData } from '../hooks/useMockData';
 import { useGPS } from '../hooks/useGPS';
 import { colors, fonts } from '../config/theme';
 import { getSortedPids, type PidDef } from '../config/pidRegistry';
+import { forceEndTrip } from '../services/tripManager';
 
 function cardinal(deg: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -119,6 +120,9 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
           <Text style={styles.tripStat}>{tripDistanceMi.toFixed(1)} mi</Text>
           <Text style={styles.tripSep}>|</Text>
           <Text style={styles.tripStat}>{formatTripTime(tripStartTs)}</Text>
+          <Pressable style={styles.tripEndBtn} onPress={() => forceEndTrip()}>
+            <Text style={styles.tripEndBtnText}>END</Text>
+          </Pressable>
         </View>
       )}
 
@@ -234,6 +238,20 @@ const styles = StyleSheet.create({
   tripSep: {
     color: colors.tripLabel,
     fontSize: fonts.sizeSm,
+  },
+  tripEndBtn: {
+    marginLeft: 'auto',
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(180, 35, 25, 0.6)',
+  },
+  tripEndBtnText: {
+    color: 'rgba(200, 50, 35, 0.9)',
+    fontSize: fonts.sizeXs,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
 
   // ---- Speed hero ----
