@@ -8,6 +8,8 @@ export interface ScheduleItem {
   label: string;
   interval_months: number;
   interval_months_severe: number | null;
+  interval_miles: number | null;
+  interval_miles_severe: number | null;
   active: boolean;
 }
 
@@ -23,6 +25,9 @@ export interface LogEntry {
 
 export interface ScheduleRow extends ScheduleItem {
   last_service_date: string | null;
+  last_odometer: number | null;
+  next_due_date: string | null;
+  next_due_odometer: number | null;
   status: ServiceStatus;
   days_until: number | null;
   effective_interval: number;
@@ -63,36 +68,34 @@ export function getDaysUntil(lastDate: string | null, intervalMonths: number): n
   return Math.round((due.getTime() - Date.now()) / msPerDay);
 }
 
-/** Seed the default ProMaster schedule if the table is empty. */
+/** Seed the default ProMaster schedule. Uses INSERT OR IGNORE so re-runs are safe. */
 export async function seedDefaultSchedule(): Promise<void> {
   const db = getDb();
   if (!db) return;
 
-  const existing = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM maintenance_schedule',
-  );
-  if (existing && existing.count > 0) return;
-
   const defaults: Omit<ScheduleItem, 'id' | 'active'>[] = [
-    { service_type: 'oil',                label: 'Oil & Filter',               interval_months: 12,  interval_months_severe: 6  },
-    { service_type: 'tires_rotated',      label: 'Tire Rotation',              interval_months: 6,   interval_months_severe: 3  },
-    { service_type: 'cabin_air_filter',   label: 'Cabin Air Filter',           interval_months: 12,  interval_months_severe: 6  },
-    { service_type: 'engine_air_filter',  label: 'Engine Air Filter',          interval_months: 36,  interval_months_severe: 18 },
-    { service_type: 'brake_fluid',        label: 'Brake Fluid',                interval_months: 36,  interval_months_severe: 18 },
-    { service_type: 'transmission_fluid', label: 'Transmission Fluid (62TE)',  interval_months: 24,  interval_months_severe: 12 },
-    { service_type: 'coolant',            label: 'Coolant (OAT)',              interval_months: 120, interval_months_severe: 60 },
-    { service_type: 'serpentine_belt',    label: 'Serpentine Belt Inspection', interval_months: 60,  interval_months_severe: 30 },
+    { service_type: 'oil',                label: 'Oil & Filter',               interval_months: 12,  interval_months_severe: 6,  interval_miles: 10000,  interval_miles_severe: 5000   },
+    { service_type: 'tires_rotated',      label: 'Tire Rotation',              interval_months: 6,   interval_months_severe: 3,  interval_miles: 7500,   interval_miles_severe: 6000   },
+    { service_type: 'cabin_air_filter',   label: 'Cabin Air Filter',           interval_months: 24,  interval_months_severe: 12, interval_miles: 30000,  interval_miles_severe: 15000  },
+    { service_type: 'engine_air_filter',  label: 'Engine Air Filter',          interval_months: 36,  interval_months_severe: 18, interval_miles: 30000,  interval_miles_severe: 15000  },
+    { service_type: 'brake_fluid',        label: 'Brake Fluid',                interval_months: 24,  interval_months_severe: 24, interval_miles: 32000,  interval_miles_severe: 32000  },
+    { service_type: 'transmission_fluid', label: 'Transmission Fluid (62TE)',  interval_months: 72,  interval_months_severe: 36, interval_miles: 60000,  interval_miles_severe: 30000  },
+    { service_type: 'coolant',            label: 'Coolant (OAT)',              interval_months: 120, interval_months_severe: 60, interval_miles: 150000, interval_miles_severe: 75000  },
+    { service_type: 'serpentine_belt',    label: 'Serpentine Belt Inspection', interval_months: 60,  interval_months_severe: 36, interval_miles: 90000,  interval_miles_severe: 60000  },
+    { service_type: 'spark_plugs',        label: 'Spark Plugs (Iridium)',      interval_months: 96,  interval_months_severe: 96, interval_miles: 100000, interval_miles_severe: 100000 },
   ];
 
   for (const item of defaults) {
     await db.runAsync(
       `INSERT OR IGNORE INTO maintenance_schedule
-         (service_type, label, interval_months, interval_months_severe)
-       VALUES (?, ?, ?, ?)`,
+         (service_type, label, interval_months, interval_months_severe, interval_miles, interval_miles_severe)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       item.service_type,
       item.label,
       item.interval_months,
       item.interval_months_severe ?? null,
+      item.interval_miles ?? null,
+      item.interval_miles_severe ?? null,
     );
   }
 }
@@ -135,18 +138,18 @@ export async function getLogEntries(serviceType?: string): Promise<LogEntry[]> {
   );
 }
 
-/** Get most recent log entry per service type (for schedule status). */
-export async function getLastServiceDates(): Promise<Record<string, string>> {
+/** Get most recent log entry (date + odometer) per service type. */
+async function getLastServiceInfo(): Promise<Record<string, { date: string; odometer: number | null }>> {
   const db = getDb();
   if (!db) return {};
-  const rows = await db.getAllAsync<{ service_type: string; service_date: string }>(
-    `SELECT service_type, MAX(service_date) as service_date
+  const rows = await db.getAllAsync<{ service_type: string; service_date: string; odometer: number | null }>(
+    `SELECT service_type, MAX(service_date) as service_date, odometer
      FROM maintenance_log GROUP BY service_type`,
   );
-  return Object.fromEntries(rows.map((r) => [r.service_type, r.service_date]));
+  return Object.fromEntries(rows.map((r) => [r.service_type, { date: r.service_date, odometer: r.odometer }]));
 }
 
-/** Get schedule items with computed status. */
+/** Get schedule items with computed status, next due date, and mileage projections. */
 export async function getScheduleWithStatus(severeDuty: boolean): Promise<ScheduleRow[]> {
   const db = getDb();
   if (!db) return [];
@@ -154,16 +157,37 @@ export async function getScheduleWithStatus(severeDuty: boolean): Promise<Schedu
   const schedule = await db.getAllAsync<ScheduleItem>(
     'SELECT * FROM maintenance_schedule WHERE active = 1 ORDER BY label',
   );
-  const lastDates = await getLastServiceDates();
+  const lastInfo = await getLastServiceInfo();
 
   const rows: ScheduleRow[] = schedule.map((item) => {
     const effectiveInterval = severeDuty && item.interval_months_severe
       ? item.interval_months_severe
       : item.interval_months;
-    const lastDate = lastDates[item.service_type] ?? null;
+    const effectiveMiles = severeDuty && item.interval_miles_severe
+      ? item.interval_miles_severe
+      : (item.interval_miles ?? null);
+    const info = lastInfo[item.service_type] ?? null;
+    const lastDate = info?.date ?? null;
+    const lastOdometer = info?.odometer ?? null;
+
+    let nextDueDate: string | null = null;
+    if (lastDate) {
+      const [y, mo, d] = lastDate.split('-').map(Number);
+      const due = new Date(y, mo - 1, d);
+      due.setMonth(due.getMonth() + effectiveInterval);
+      nextDueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+    }
+
+    const nextDueOdometer = lastOdometer !== null && effectiveMiles !== null
+      ? lastOdometer + effectiveMiles
+      : null;
+
     return {
       ...item,
       last_service_date: lastDate,
+      last_odometer: lastOdometer,
+      next_due_date: nextDueDate,
+      next_due_odometer: nextDueOdometer,
       status: getServiceStatus(lastDate, effectiveInterval),
       days_until: getDaysUntil(lastDate, effectiveInterval),
       effective_interval: effectiveInterval,

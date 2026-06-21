@@ -38,7 +38,7 @@ interface Props {
   onWizardComplete: (severeDuty: boolean) => void;
 }
 
-type Tab = 'SCHEDULE' | 'HISTORY';
+type Tab = 'SCHEDULE' | 'HISTORY' | 'REFERENCE';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -61,7 +61,20 @@ const SERVICE_TYPES = [
   { value: 'transmission_fluid',  label: 'Transmission Fluid (62TE)' },
   { value: 'coolant',             label: 'Coolant (OAT)' },
   { value: 'serpentine_belt',     label: 'Serpentine Belt Inspection' },
+  { value: 'spark_plugs',         label: 'Spark Plugs (Iridium)' },
   { value: 'other',               label: 'Other' },
+];
+
+const REFERENCE_INTERVALS = [
+  { label: 'Oil & Filter',            normalTime: '12 mo',  normalMi: '10,000',  severeTime: '6 mo',  severeMi: '5,000',   notes: 'Synthetic 5W-20; use Oil Life Monitor' },
+  { label: 'Tire Rotation',           normalTime: '6 mo',   normalMi: '7,500',   severeTime: '3 mo',  severeMi: '6,000',   notes: 'Rotate at every oil change (FWD)' },
+  { label: 'Cabin Air Filter',        normalTime: '24 mo',  normalMi: '30,000',  severeTime: '12 mo', severeMi: '15,000',  notes: '' },
+  { label: 'Engine Air Filter',       normalTime: '36 mo',  normalMi: '30,000',  severeTime: '18 mo', severeMi: '15,000',  notes: 'More often in dusty conditions' },
+  { label: 'Brake Fluid',             normalTime: '24 mo',  normalMi: '32,000',  severeTime: '24 mo', severeMi: '32,000',  notes: 'DOT 4; time-based, whichever comes first' },
+  { label: 'Trans Fluid (62TE)',       normalTime: '72 mo',  normalMi: '60,000',  severeTime: '36 mo', severeMi: '30,000',  notes: 'Mopar ATF+4; factory severe = 6yr / 60k' },
+  { label: 'Coolant (OAT)',           normalTime: '120 mo', normalMi: '150,000', severeTime: '60 mo', severeMi: '75,000',  notes: 'Mopar OAT MS-12106; 10yr / 150k per manual' },
+  { label: 'Serpentine Belt',         normalTime: '60 mo',  normalMi: '90,000',  severeTime: '36 mo', severeMi: '60,000',  notes: 'Condition-based inspection' },
+  { label: 'Spark Plugs (Iridium)',   normalTime: '96 mo',  normalMi: '100,000', severeTime: '96 mo', severeMi: '100,000', notes: 'Mileage-based; iridium tipped' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -93,6 +106,12 @@ function formatDaysUntil(row: ScheduleRow): string {
   return `${row.days_until}d`;
 }
 
+function formatMonthYear(iso: string): string {
+  const [y, mo] = iso.split('-').map(Number);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[mo - 1]} ${y}`;
+}
+
 function serviceLabel(serviceType: string): string {
   return SERVICE_TYPES.find((t) => t.value === serviceType)?.label ?? serviceType;
 }
@@ -105,6 +124,18 @@ function ScheduleItem({ row }: { row: ScheduleRow }) {
   const badgeColor = STATUS_COLORS[row.status];
   const daysText = formatDaysUntil(row);
 
+  const lastText = row.last_service_date
+    ? row.last_odometer !== null
+      ? `Last: ${formatDisplayDate(row.last_service_date)} @ ${row.last_odometer.toLocaleString()} mi`
+      : `Last: ${formatDisplayDate(row.last_service_date)}`
+    : 'No record';
+
+  const nextText = row.next_due_date
+    ? row.next_due_odometer !== null
+      ? `Next: ${formatMonthYear(row.next_due_date)} ~${row.next_due_odometer.toLocaleString()} mi`
+      : `Next: ${formatMonthYear(row.next_due_date)}`
+    : null;
+
   return (
     <View style={styles.scheduleRow}>
       <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
@@ -112,11 +143,8 @@ function ScheduleItem({ row }: { row: ScheduleRow }) {
       </View>
       <View style={styles.scheduleRowContent}>
         <Text style={styles.scheduleLabel}>{row.label}</Text>
-        <Text style={styles.scheduleMeta}>
-          {row.last_service_date
-            ? `Last: ${formatDisplayDate(row.last_service_date)}`
-            : 'No record'}
-        </Text>
+        <Text style={styles.scheduleMeta}>{lastText}</Text>
+        {nextText ? <Text style={styles.scheduleMeta}>{nextText}</Text> : null}
       </View>
       <Text style={[styles.daysUntil, row.days_until !== null && row.days_until < 0 && styles.daysUntilOverdue]}>
         {daysText}
@@ -146,6 +174,32 @@ function HistoryItem({ entry }: { entry: LogEntry }) {
         <Text style={styles.historyNotes}>{entry.notes}</Text>
       ) : null}
     </View>
+  );
+}
+
+function ReferenceTab() {
+  return (
+    <ScrollView contentContainerStyle={styles.refContent}>
+      <Text style={styles.refTitle}>2014 Ram ProMaster 3.6L Pentastar</Text>
+      <Text style={styles.refSubtitle}>Recommended Maintenance Intervals</Text>
+      {REFERENCE_INTERVALS.map((item, i) => (
+        <View key={i} style={styles.refCard}>
+          <Text style={styles.refCardTitle}>{item.label}</Text>
+          <View style={styles.refIntervalRow}>
+            <Text style={styles.refIntervalLabel}>Normal:</Text>
+            <Text style={styles.refIntervalValue}>{item.normalTime}  •  {item.normalMi} mi</Text>
+          </View>
+          <View style={styles.refIntervalRow}>
+            <Text style={styles.refIntervalLabel}>Severe:</Text>
+            <Text style={styles.refIntervalValue}>{item.severeTime}  •  {item.severeMi} mi</Text>
+          </View>
+          {item.notes ? <Text style={styles.refCardNotes}>{item.notes}</Text> : null}
+        </View>
+      ))}
+      <Text style={styles.refSource}>
+        {'Source: 2014 Ram ProMaster Owner\'s Manual.\nNormal = standard use. Severe = commercial/delivery/stop-and-go.'}
+      </Text>
+    </ScrollView>
   );
 }
 
@@ -286,7 +340,7 @@ export function MaintenanceScreen({ onBack, severeDuty, wizardComplete, onWizard
 
       {/* Tabs */}
       <View style={styles.tabBar}>
-        {(['SCHEDULE', 'HISTORY'] as Tab[]).map((tab) => (
+        {(['SCHEDULE', 'HISTORY', 'REFERENCE'] as Tab[]).map((tab) => (
           <Pressable
             key={tab}
             style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]}
@@ -334,6 +388,8 @@ export function MaintenanceScreen({ onBack, severeDuty, wizardComplete, onWizard
             }
           />
         )}
+
+        {activeTab === 'REFERENCE' && <ReferenceTab />}
       </View>
 
       {/* Floating + button */}
@@ -897,5 +953,76 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizeMd,
     fontWeight: '900',
     letterSpacing: 1,
+  },
+
+  // ---- Reference tab ----
+
+  refContent: {
+    padding: 12,
+    paddingBottom: 80,
+  },
+
+  refTitle: {
+    color: colors.amber,
+    fontSize: fonts.sizeMd,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+
+  refSubtitle: {
+    color: colors.textMuted,
+    fontSize: fonts.sizeXs,
+    marginBottom: 12,
+  },
+
+  refCard: {
+    borderWidth: 1,
+    borderColor: colors.amberBorder,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(35, 32, 26, 0.70)',
+  },
+
+  refCardTitle: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizeSm,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+
+  refIntervalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+
+  refIntervalLabel: {
+    color: colors.textMuted,
+    fontSize: fonts.sizeXs,
+    width: 56,
+  },
+
+  refIntervalValue: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizeXs,
+    fontWeight: '600',
+  },
+
+  refCardNotes: {
+    color: colors.textMuted,
+    fontSize: fonts.sizeXs,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+
+  refSource: {
+    color: colors.textMuted,
+    fontSize: fonts.sizeXs,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
+    fontStyle: 'italic',
   },
 });

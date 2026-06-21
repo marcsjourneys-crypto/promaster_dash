@@ -134,6 +134,8 @@ export async function initializeAdapter(): Promise<boolean> {
     await sendCommand('ATSP0', 2000); // Auto protocol
     await sendCommand('ATST7D', 2000); // Timeout ~500ms
     await sendCommand('ATAR', 2000);   // Reset adaptive timing
+    await sendCommand('ATCAF1', 2000); // CAN auto-formatting on (explicit — some clones default to off)
+    await sendCommand('ATAT1', 2000);  // Adaptive timing on (explicit — needed for reliable mode 22 on generic adapters)
 
     // Validate connection
     dlog('OBD: Reading voltage (ATRV)...');

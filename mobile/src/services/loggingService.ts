@@ -101,6 +101,50 @@ export async function initDatabase(): Promise<boolean> {
     try {
       await db.execAsync('ALTER TABLE trips ADD COLUMN name TEXT');
     } catch (_) {}
+    // Add mileage interval columns to maintenance_schedule (safe migration)
+    try {
+      await db.execAsync('ALTER TABLE maintenance_schedule ADD COLUMN interval_miles INTEGER');
+    } catch (_) {}
+    try {
+      await db.execAsync('ALTER TABLE maintenance_schedule ADD COLUMN interval_miles_severe INTEGER');
+    } catch (_) {}
+    // Backfill researched mileage values and correct wrong month intervals for existing installs
+    await db.execAsync(`
+      UPDATE maintenance_schedule SET
+        interval_miles = CASE service_type
+          WHEN 'oil'                THEN 10000
+          WHEN 'tires_rotated'      THEN 7500
+          WHEN 'cabin_air_filter'   THEN 30000
+          WHEN 'engine_air_filter'  THEN 30000
+          WHEN 'brake_fluid'        THEN 32000
+          WHEN 'transmission_fluid' THEN 60000
+          WHEN 'coolant'            THEN 150000
+          WHEN 'serpentine_belt'    THEN 90000
+          WHEN 'spark_plugs'        THEN 100000
+          ELSE interval_miles END,
+        interval_miles_severe = CASE service_type
+          WHEN 'oil'                THEN 5000
+          WHEN 'tires_rotated'      THEN 6000
+          WHEN 'cabin_air_filter'   THEN 15000
+          WHEN 'engine_air_filter'  THEN 15000
+          WHEN 'brake_fluid'        THEN 32000
+          WHEN 'transmission_fluid' THEN 30000
+          WHEN 'coolant'            THEN 75000
+          WHEN 'serpentine_belt'    THEN 60000
+          WHEN 'spark_plugs'        THEN 100000
+          ELSE interval_miles_severe END,
+        interval_months = CASE service_type
+          WHEN 'cabin_air_filter'   THEN 24
+          WHEN 'brake_fluid'        THEN 24
+          WHEN 'transmission_fluid' THEN 72
+          ELSE interval_months END,
+        interval_months_severe = CASE service_type
+          WHEN 'cabin_air_filter'   THEN 12
+          WHEN 'brake_fluid'        THEN 24
+          WHEN 'transmission_fluid' THEN 36
+          WHEN 'serpentine_belt'    THEN 36
+          ELSE interval_months_severe END
+    `);
     try {
       await repairUnfinalizedTrips();
     } catch (_) {}

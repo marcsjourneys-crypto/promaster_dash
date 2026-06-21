@@ -26,7 +26,6 @@ import {
 } from '../services/obdTransport';
 import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, loadTransCandidate, clearTransCandidate } from '../services/obdService';
 import { scanCandidates, selectBestCandidate, type CandidateResult } from '../services/transTempCandidates';
-import { debugListAccessories } from '../services/btClassicManager';
 import { dlog } from '../services/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -179,24 +178,6 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
     }
   }, []);
 
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
-
-  const handleDebug = useCallback(async () => {
-    const info = await debugListAccessories();
-    setDebugInfo(info);
-    if (info.length === 0) {
-      Alert.alert(
-        'No Accessories Found',
-        'iOS returned 0 accessories. This usually means:\n\n' +
-        '1. The protocol string in the app doesn\'t match what the VLinker MS advertises\n' +
-        '2. The device isn\'t connected in iOS Settings → Bluetooth\n\n' +
-        'Check that the VLinker MS shows as "Connected" in iOS Bluetooth settings.',
-      );
-    } else {
-      Alert.alert('Accessories Found', info.join('\n\n'));
-    }
-  }, []);
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -310,7 +291,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
             >
               <View style={styles.deviceInfo}>
                 <Text style={styles.deviceName}>
-                  {item.name ?? 'Unknown Device'}
+                  {item.name || 'Unknown Device'}
                 </Text>
                 <Text style={styles.deviceId}>{item.id}</Text>
               </View>
@@ -333,22 +314,6 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
           }
           contentContainerStyle={styles.list}
         />
-      )}
-
-      {/* Debug: List accessories */}
-      {transport === 'mfi' && !connected && (
-        <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
-          <Pressable style={styles.actionBtn} onPress={handleDebug}>
-            <Text style={styles.actionBtnText}>DEBUG: LIST ALL ACCESSORIES</Text>
-          </Pressable>
-          {debugInfo.length > 0 && (
-            <View style={{ marginTop: 8 }}>
-              {debugInfo.map((line, i) => (
-                <Text key={i} style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>{line}</Text>
-              ))}
-            </View>
-          )}
-        </View>
       )}
 
       {/* Trans Temp Scan Results */}

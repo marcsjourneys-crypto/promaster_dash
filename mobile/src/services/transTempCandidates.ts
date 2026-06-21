@@ -81,8 +81,8 @@ export async function scanCandidates(): Promise<CandidateResult[]> {
       dlog(`Trans scan: Trying "${candidate.name}" (ATSH${candidate.header}, 22${candidate.did})...`);
       // Set CAN header
       await sendCommand(`ATSH${candidate.header}`, 2000);
-      // Small delay for adapter
-      await sleep(100);
+      // Longer delay for generic ELM327 clones that are slow to process ATSH
+      await sleep(200);
 
       // Request Mode 22 read
       const raw = await sendCommand(`22${candidate.did}`, 3000);
