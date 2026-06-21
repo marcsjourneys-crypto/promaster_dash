@@ -24,7 +24,7 @@ import {
   type ScannedDevice,
   type TransportType,
 } from '../services/obdTransport';
-import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, loadTransCandidate, clearTransCandidate } from '../services/obdService';
+import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, loadTransCandidate, clearTransCandidate, getLockedProtocol } from '../services/obdService';
 import { scanCandidates, selectBestCandidate, type CandidateResult } from '../services/transTempCandidates';
 import { dlog } from '../services/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -113,7 +113,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
         if (!saved || saved.twoByteMode === false) {
           dlog('Trans: No saved candidate — scanning...');
           try {
-            const results = await scanCandidates();
+            const results = await scanCandidates(getLockedProtocol());
             const best = selectBestCandidate(results);
             if (best) {
               setTransCandidate(best);
@@ -156,7 +156,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
     setScanningTrans(true);
     stopPolling();
     try {
-      const results = await scanCandidates();
+      const results = await scanCandidates(getLockedProtocol());
       setTransResults(results);
 
       const best = selectBestCandidate(results);

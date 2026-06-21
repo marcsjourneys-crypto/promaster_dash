@@ -73,7 +73,7 @@ export interface CandidateResult {
  * Scan all candidates and return results.
  * Must be called when BLE is connected and adapter is initialized.
  */
-export async function scanCandidates(): Promise<CandidateResult[]> {
+export async function scanCandidates(restoreProtocol = '0'): Promise<CandidateResult[]> {
   const results: CandidateResult[] = [];
 
   for (const candidate of CANDIDATES) {
@@ -110,12 +110,13 @@ export async function scanCandidates(): Promise<CandidateResult[]> {
     }
   }
 
-  // Reset header, protocol, and timing so subsequent standard OBD polling
-  // works correctly. 29-bit header attempts (18DAxxF1) can leave the adapter
-  // in extended-CAN mode; ATSP0 forces auto re-negotiation on the next command.
+  // Reset header and restore the detected protocol.
+  // Using ATSP<N> (specific) instead of ATSP0 (auto) avoids a full re-negotiation
+  // that can fail when 29-bit ATSH commands have left the adapter in a dirty state.
+  // restoreProtocol comes from ATDPN captured during adapter init in obdService.
   try {
     await sendCommand('ATSH7DF', 2000);
-    await sendCommand('ATSP0', 2000);
+    await sendCommand(`ATSP${restoreProtocol}`, 2000);
     await sendCommand('ATAR', 2000);
   } catch {}
 

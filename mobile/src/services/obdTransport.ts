@@ -21,7 +21,7 @@
 //
 // To revert: flip this constant to false.  All diagnostic behaviour disappears.
 // =============================================================================
-export const BLE_ONLY_DIAGNOSTIC = true;
+export const BLE_ONLY_DIAGNOSTIC = false;
 
 import * as BLE from './bleManager';
 import * as BTClassic from './btClassicManager';

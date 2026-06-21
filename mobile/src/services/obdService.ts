@@ -92,6 +92,11 @@ let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 // Working trans temp candidate (set after discovery)
 let transCandidate: TransTempCandidate | null = null;
 
+// Protocol number detected during init (e.g., '6' = 11-bit CAN 500k).
+// Captured via ATDPN after first successful 010C so scanCandidates() can
+// restore the exact protocol instead of re-negotiating via ATSP0.
+let lockedProtocol = '0';
+
 // Enabled PIDs (set from settings before polling starts)
 let enabledPidIds: Set<string> = new Set();
 
@@ -107,6 +112,11 @@ export function setTransCandidate(candidate: TransTempCandidate | null): void {
 /** Get the current trans candidate. */
 export function getTransCandidate(): TransTempCandidate | null {
   return transCandidate;
+}
+
+/** Get the CAN protocol number locked during adapter init (e.g., '6' for 11-bit 500k). */
+export function getLockedProtocol(): string {
+  return lockedProtocol;
 }
 
 /** Set the enabled PID list (call before startPolling). */
@@ -165,6 +175,21 @@ export async function initializeAdapter(): Promise<boolean> {
     } else {
       dlog('OBD: RPM OK');
     }
+
+    // Capture the auto-detected protocol number so the trans scan cleanup can
+    // restore it with ATSP<N> instead of ATSP0 (which forces a full re-negotiation
+    // that can fail after 29-bit ATSH commands corrupt the adapter's CAN state).
+    // ATDPN returns e.g. "6" (locked) or "A6" (auto-detected as 6) — strip the A.
+    try {
+      const dpn = await sendCommand('ATDPN', 2000);
+      const match = dpn.trim().match(/^A?([0-9A-Fa-f])$/i);
+      if (match) {
+        lockedProtocol = match[1].toUpperCase();
+        dlog(`OBD: Protocol locked = ATSP${lockedProtocol}`);
+      } else {
+        dlog(`OBD: ATDPN parse failed ("${dpn}") — will use ATSP0 fallback in trans scan`);
+      }
+    } catch {}
 
     consecutiveFailures = 0;
     dlog('OBD: Adapter init complete');
