@@ -105,43 +105,38 @@ export function parseMode22(raw: string, did: string): number[] | null {
   return null;
 }
 
-/**
- * Parse Mode 03 DTC response.
- * Returns list of DTC code strings like ["P0300", "P0128"].
- *
- * Response: "43 <A><B> <A><B> ..."
- * Each DTC is 2 bytes: first nibble encodes type (P/C/B/U),
- * remaining nibbles are the code digits.
- */
-export function parseMode03(raw: string): string[] {
+/** Shared DTC byte-pair parser. marker = '43' (Mode 03) or '47' (Mode 07). */
+function parseDTCResponse(raw: string, marker: string): string[] {
   if (isNoData(raw)) return [];
-
   const lines = cleanResponse(raw);
   const codes: string[] = [];
-
+  const target = marker.toUpperCase();
   for (const line of lines) {
     const hex = line.replace(/\s/g, '').toUpperCase();
-
-    // Find "43" marker
-    let idx = hex.indexOf('43');
+    let idx = hex.indexOf(target);
     if (idx < 0) continue;
-    idx += 2; // skip the "43"
-
-    // Read pairs of bytes
+    idx += 2;
     while (idx + 4 <= hex.length) {
       const a = parseInt(hex.substring(idx, idx + 2), 16);
       const b = parseInt(hex.substring(idx + 2, idx + 4), 16);
       idx += 4;
-
       if (isNaN(a) || isNaN(b)) break;
-      if (a === 0 && b === 0) continue; // padding
-
+      if (a === 0 && b === 0) continue;
       const code = decodeDTC(a, b);
       if (code) codes.push(code);
     }
   }
-
   return codes;
+}
+
+/** Parse Mode 03 stored DTC response. Returns codes like ["P0300", "U0140"]. */
+export function parseMode03(raw: string): string[] {
+  return parseDTCResponse(raw, '43');
+}
+
+/** Parse Mode 07 pending DTC response (same byte format as Mode 03, prefix 47). */
+export function parseMode07(raw: string): string[] {
+  return parseDTCResponse(raw, '47');
 }
 
 /** Decode 2 bytes into a DTC string. Returns null for invalid/implausible codes. */

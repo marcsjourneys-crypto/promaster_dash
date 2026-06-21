@@ -13,6 +13,7 @@ import {
   VOLT_LOW,
   VOLT_HIGH,
 } from '../models/types';
+import { formatCodes } from '../data/dtcLookup';
 
 export type AlertPriority = 'none' | 'warning' | 'critical';
 
@@ -187,10 +188,7 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
 
     // Priority 1: DTCs
     if (s.dtcCount > 0) {
-      fireAlert(
-        `CHECK ENGINE: ${s.dtcCount} code${s.dtcCount > 1 ? 's' : ''} detected`,
-        'critical', 'critical',
-      );
+      fireAlert(`CHECK ENGINE: ${formatCodes(s.activeDtcs)}`, 'critical', 'critical');
       return;
     }
 

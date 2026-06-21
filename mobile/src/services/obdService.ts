@@ -11,6 +11,7 @@ import { dlog } from './debugLog';
 import {
   parseMode01,
   parseMode03,
+  parseMode07,
   parseMode22,
   parseVoltage,
   coolantToF,
@@ -217,6 +218,42 @@ export function stopPolling(): void {
   if (pollingTimer) {
     clearTimeout(pollingTimer);
     pollingTimer = null;
+  }
+}
+
+/**
+ * On-demand DTC read: pauses the poll loop, reads stored (Mode 03) and
+ * pending (Mode 07) codes, updates the store, then restarts polling.
+ */
+export async function readDTCsNow(): Promise<{ stored: string[]; pending: string[] }> {
+  const wasRunning = running;
+  if (wasRunning) stopPolling();
+  try {
+    const stored = parseMode03(await sendCommand('03', 5000));
+    const pending = parseMode07(await sendCommand('07', 5000));
+    useVehicleStore.getState().updateDTCs(stored);
+    dlog(`OBD: Manual DTC read — stored: [${stored.join(', ')}], pending: [${pending.join(', ')}]`);
+    return { stored, pending };
+  } finally {
+    if (wasRunning) startPolling();
+  }
+}
+
+/**
+ * Clear all stored DTCs (Mode 04). Pauses polling, sends clear command,
+ * updates store, restarts polling. Returns true if adapter acknowledged.
+ */
+export async function clearDTCs(): Promise<boolean> {
+  const wasRunning = running;
+  if (wasRunning) stopPolling();
+  try {
+    const resp = await sendCommand('04', 5000);
+    const ok = resp.toUpperCase().includes('44');
+    if (ok) useVehicleStore.getState().updateDTCs([]);
+    dlog(`OBD: Clear DTCs (Mode 04) — response: "${resp}", success: ${ok}`);
+    return ok;
+  } finally {
+    if (wasRunning) startPolling();
   }
 }
 

@@ -12,10 +12,11 @@ import { loadSettings, type Settings, DEFAULT_SETTINGS } from './src/config/sett
 import { setEnabledPids } from './src/services/obdService';
 import { seedDefaultSchedule, getScheduleWithStatus } from './src/services/maintenanceService';
 import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
+import { CodesScreen } from './src/screens/CodesScreen';
 import { initDatabase } from './src/services/loggingService';
 import { restoreTrip, tickWatchdog } from './src/services/tripManager';
 
-type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance';
+type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance' | 'codes';
 
 let reminderShown = false;
 
@@ -77,7 +78,7 @@ export default function App() {
 
   const handleNavigate = useCallback((s: string) => {
     // Map any route to valid screens
-    if (s === 'scan') s = 'ble'; // SCAN CODES → BLE connection screen
+    if (s === 'scan') s = 'codes'; // SCAN CODES → diagnostic codes screen
     setScreen(s as Screen);
   }, []);
 
@@ -122,6 +123,9 @@ export default function App() {
       )}
       {screen === 'debug' && (
         <DebugLogScreen onBack={() => setScreen('dashboard')} />
+      )}
+      {screen === 'codes' && (
+        <CodesScreen onBack={() => setScreen('dashboard')} />
       )}
       {screen === 'maintenance' && (
         <MaintenanceScreen

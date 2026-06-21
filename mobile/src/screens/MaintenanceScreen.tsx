@@ -180,8 +180,8 @@ function HistoryItem({ entry }: { entry: LogEntry }) {
 function ReferenceTab() {
   return (
     <ScrollView contentContainerStyle={styles.refContent}>
-      <Text style={styles.refTitle}>2014 Ram ProMaster 3.6L Pentastar</Text>
-      <Text style={styles.refSubtitle}>Recommended Maintenance Intervals</Text>
+      <Text style={styles.refTitle}>Ram ProMaster 3.6L Pentastar V6 (2014–2026)</Text>
+      <Text style={styles.refSubtitle}>Recommended Maintenance Intervals — Gas models, all years</Text>
       {REFERENCE_INTERVALS.map((item, i) => (
         <View key={i} style={styles.refCard}>
           <Text style={styles.refCardTitle}>{item.label}</Text>
@@ -196,8 +196,13 @@ function ReferenceTab() {
           {item.notes ? <Text style={styles.refCardNotes}>{item.notes}</Text> : null}
         </View>
       ))}
+      <View style={styles.dieselNote}>
+        <Text style={styles.dieselNoteText}>
+          {'⚠ EcoDiesel (3.0L) models: different oil type, no spark plugs, and a diesel fuel filter interval. Consult your owner\'s manual for diesel-specific service schedules.'}
+        </Text>
+      </View>
       <Text style={styles.refSource}>
-        {'Source: 2014 Ram ProMaster Owner\'s Manual.\nNormal = standard use. Severe = commercial/delivery/stop-and-go.'}
+        {'Source: Ram ProMaster Owner\'s Manual (2014–2026).\nNormal = standard use. Severe = commercial/delivery/stop-and-go.'}
       </Text>
     </ScrollView>
   );
@@ -1024,5 +1029,21 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 18,
     fontStyle: 'italic',
+  },
+
+  dieselNote: {
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 140, 35, 0.35)',
+    backgroundColor: 'rgba(50, 40, 10, 0.50)',
+  },
+
+  dieselNoteText: {
+    color: colors.amber,
+    fontSize: fonts.sizeXs,
+    lineHeight: 18,
   },
 });

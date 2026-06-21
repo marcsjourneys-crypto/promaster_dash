@@ -170,7 +170,7 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
         <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('trips')}>
           <Text style={styles.actionBtnText}>TRIPS</Text>
         </Pressable>
-        <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('ble')}>
+        <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('codes')}>
           <Text style={styles.actionBtnText}>SCAN CODES</Text>
         </Pressable>
         <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('maintenance')}>
