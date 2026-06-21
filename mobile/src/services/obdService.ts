@@ -6,7 +6,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendCommand, isConnected } from './obdTransport';
+import { sendCommand, isConnected, getConnectedDeviceName, BLE_ONLY_DIAGNOSTIC } from './obdTransport';
 import { dlog } from './debugLog';
 import {
   parseMode01,
@@ -168,9 +168,42 @@ export async function initializeAdapter(): Promise<boolean> {
 
     consecutiveFailures = 0;
     dlog('OBD: Adapter init complete');
+
+    if (BLE_ONLY_DIAGNOSTIC) {
+      // Sample PID: re-read RPM to capture a fresh parsed value for the summary
+      dlog('[BLE-DIAG] INIT: Diagnostic sample PID read (010C / RPM)...');
+      const sampleRaw = await sendCommand('010C', 3000);
+      const sampleBytes = parseMode01(sampleRaw, '0C');
+      const sampleRpm =
+        sampleBytes && sampleBytes.length >= 2 ? bytesToRPM(sampleBytes) : null;
+      const deviceName = getConnectedDeviceName();
+
+      dlog('[BLE-DIAG] ============================================');
+      dlog('[BLE-DIAG] DIAGNOSTIC SUMMARY');
+      dlog(`[BLE-DIAG]   BLE adapter found:        YES — ${deviceName ?? '(name unavailable)'}`);
+      dlog(`[BLE-DIAG]   BLE connected:            ${isConnected() ? 'YES' : 'NO'}`);
+      dlog('[BLE-DIAG]   Notify + write chars:     YES (connect succeeded)');
+      dlog('[BLE-DIAG]   ELM327 init:              SUCCESS');
+      dlog(
+        `[BLE-DIAG]   Sample PID (010C / RPM):  ${
+          sampleRpm !== null
+            ? `SUCCESS — ${sampleRpm} RPM`
+            : 'NO DATA (vehicle may be off or key-off)'
+        }`,
+      );
+      dlog('[BLE-DIAG] ============================================');
+    }
+
     return true;
   } catch (e: any) {
     dlog(`OBD: Init failed: ${e.message}`);
+    if (BLE_ONLY_DIAGNOSTIC) {
+      dlog('[BLE-DIAG] ============================================');
+      dlog('[BLE-DIAG] DIAGNOSTIC SUMMARY — INIT FAILED');
+      dlog(`[BLE-DIAG]   ELM327 init: FAILED — ${e.message}`);
+      dlog('[BLE-DIAG]   See [BLE-DIAG] CMD lines above for last successful command');
+      dlog('[BLE-DIAG] ============================================');
+    }
     return false;
   }
 }

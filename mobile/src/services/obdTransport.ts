@@ -9,6 +9,20 @@
  *   - BLE: Works without MFi string, lower throughput but sufficient for standard OBD polling
  */
 
+// =============================================================================
+// TEMPORARY DIAGNOSTIC — remove before App Store release.
+//
+// BLE_ONLY_DIAGNOSTIC = true:
+//   • Blocks transport switching to MFi; BLE path only.
+//   • Forces unfiltered 15-second BLE scan (all advertising devices visible).
+//   • Logs every OBD command sent and every raw response with [BLE-DIAG] prefix.
+//   • Enables verbose service/characteristic discovery logging on connect.
+//   • Emits a DIAGNOSTIC SUMMARY block after ELM327 init.
+//
+// To revert: flip this constant to false.  All diagnostic behaviour disappears.
+// =============================================================================
+export const BLE_ONLY_DIAGNOSTIC = true;
+
 import * as BLE from './bleManager';
 import * as BTClassic from './btClassicManager';
 import { dlog } from './debugLog';
@@ -19,6 +33,10 @@ let activeTransport: TransportType = 'ble';
 
 /** Set which transport to use. */
 export function setTransport(type: TransportType): void {
+  if (BLE_ONLY_DIAGNOSTIC) {
+    dlog('[BLE-DIAG] setTransport() blocked — BLE_ONLY_DIAGNOSTIC forces BLE-only mode');
+    return;
+  }
   dlog(`Transport: switched to ${type}`);
   activeTransport = type;
 }
@@ -41,6 +59,11 @@ export async function scanForDevices(
   onFound: (device: ScannedDevice) => void,
   durationMs = 10000,
 ): Promise<() => void> {
+  if (BLE_ONLY_DIAGNOSTIC) {
+    // DIAGNOSTIC: force BLE, 15s window, verbose logging, all devices visible
+    BLE.initBLE();
+    return BLE.scanForDevices(onFound, 15000, true);
+  }
   if (activeTransport === 'mfi') {
     // MFi: paired/connected devices appear via External Accessory
     const devices = await BTClassic.getPairedDevices();
@@ -52,16 +75,19 @@ export async function scanForDevices(
   } else {
     // BLE: active scan
     BLE.initBLE();
-    return BLE.scanForDevices(onFound, durationMs);
+    return BLE.scanForDevices(onFound, durationMs, false);
   }
 }
 
 /** Connect to a device by ID. */
 export async function connectToDevice(deviceId: string): Promise<boolean> {
+  if (BLE_ONLY_DIAGNOSTIC) {
+    return BLE.connectToDevice(deviceId, true);
+  }
   if (activeTransport === 'mfi') {
     return BTClassic.connectToDevice(deviceId);
   } else {
-    return BLE.connectToDevice(deviceId);
+    return BLE.connectToDevice(deviceId, false);
   }
 }
 
@@ -97,6 +123,14 @@ export async function sendCommand(
   command: string,
   timeoutMs = 3000,
 ): Promise<string> {
+  if (BLE_ONLY_DIAGNOSTIC) {
+    // Log every command + full response so the init sequence is fully visible
+    dlog(`[BLE-DIAG] CMD → ${command}`);
+    const resp = await BLE.sendCommand(command, timeoutMs);
+    const safe = resp.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+    dlog(`[BLE-DIAG] CMD ← "${safe}"`);
+    return resp;
+  }
   if (activeTransport === 'mfi') {
     return BTClassic.sendCommand(command, timeoutMs);
   } else {

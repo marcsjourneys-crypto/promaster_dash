@@ -90,10 +90,16 @@ async function waitForPoweredOn(mgr: BleManager, timeoutMs = 5000): Promise<bool
   });
 }
 
-/** Scan for OBD adapter devices. Returns found devices via callback. */
+/**
+ * Scan for OBD adapter devices. Returns found devices via callback.
+ * diagnostic=true (set by obdTransport when BLE_ONLY_DIAGNOSTIC is active):
+ *   - logs every advertising device with full name/UUID/RSSI detail
+ *   - surfaces ALL devices via onFound (not just OBD-matching ones)
+ */
 export function scanForDevices(
   onFound: (device: ScannedDevice) => void,
   durationMs = 10000,
+  diagnostic = false,
 ): () => void {
   const mgr = initBLE();
   const seen = new Set<string>();
@@ -108,7 +114,13 @@ export function scanForDevices(
       dlog('BLE: Bluetooth not powered on after 5s — is Bluetooth enabled in Settings?');
       return;
     }
-    dlog('BLE: Starting scan...');
+
+    if (diagnostic) {
+      dlog(`[BLE-DIAG] SCAN: Unfiltered ${durationMs / 1000}s scan — ALL advertising devices will appear`);
+    } else {
+      dlog('BLE: Starting scan...');
+    }
+
     mgr.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
       if (error) {
         dlog(`BLE: Scan error: ${error.message}`);
@@ -117,26 +129,49 @@ export function scanForDevices(
       if (!device || seen.has(device.id)) return;
       seen.add(device.id);
 
-      // Log ALL devices so we can see what's out there
       const name = device.name || device.localName || null;
-      const svcIds = device.serviceUUIDs?.join(',') ?? 'none';
-      dlog(`BLE: Saw ${name ?? '(no name)'} [${device.id}] rssi=${device.rssi} svcs=${svcIds}`);
 
-      // Filter to likely OBD adapters
-      const isOBD =
-        name && OBD_NAME_PREFIXES.some((p) => name.toUpperCase().includes(p.toUpperCase()));
-
-      if (isOBD || (device.serviceUUIDs && device.serviceUUIDs.some(
-        (uuid) => KNOWN_SERVICE_UUIDS.some((k) => uuid.toUpperCase().includes(k.toUpperCase())),
-      ))) {
-        dlog(`BLE: ^^^ Matches OBD filter — adding to list`);
+      if (diagnostic) {
+        // Verbose: log every field, flag VLinker name matches
+        const isMatch = name
+          ? OBD_NAME_PREFIXES.some((p) => name.toUpperCase().includes(p.toUpperCase()))
+          : false;
+        const hasMfg = device.manufacturerData != null;
+        const svcs = device.serviceUUIDs?.length
+          ? device.serviceUUIDs.join(', ')
+          : '(none)';
+        dlog(
+          `[BLE-DIAG] SCAN: name="${name ?? '(none)'}" localName="${device.localName ?? '(none)'}"` +
+          ` id=${device.id} rssi=${device.rssi}` +
+          ` serviceUUIDs=[${svcs}] mfgData=${hasMfg ? 'YES' : 'NO'}` +
+          (isMatch ? ' ← VLINKER MATCH' : ''),
+        );
+        // Surface ALL devices so the connect list shows everything visible
         onFound({ id: device.id, name, rssi: device.rssi });
+      } else {
+        // Normal path: log summary, filter to likely OBD adapters before surfacing
+        const svcIds = device.serviceUUIDs?.join(',') ?? 'none';
+        dlog(`BLE: Saw ${name ?? '(no name)'} [${device.id}] rssi=${device.rssi} svcs=${svcIds}`);
+
+        const isOBD =
+          name && OBD_NAME_PREFIXES.some((p) => name.toUpperCase().includes(p.toUpperCase()));
+
+        if (isOBD || (device.serviceUUIDs && device.serviceUUIDs.some(
+          (uuid) => KNOWN_SERVICE_UUIDS.some((k) => uuid.toUpperCase().includes(k.toUpperCase())),
+        ))) {
+          dlog(`BLE: ^^^ Matches OBD filter — adding to list`);
+          onFound({ id: device.id, name, rssi: device.rssi });
+        }
       }
     });
 
     // Auto-stop after duration
     setTimeout(() => {
-      dlog(`BLE: Scan complete (${durationMs / 1000}s). Saw ${seen.size} devices total.`);
+      if (diagnostic) {
+        dlog(`[BLE-DIAG] SCAN: Complete (${durationMs / 1000}s). Saw ${seen.size} total devices. Grep log for VLINKER MATCH.`);
+      } else {
+        dlog(`BLE: Scan complete (${durationMs / 1000}s). Saw ${seen.size} devices total.`);
+      }
       mgr.stopDeviceScan();
     }, durationMs);
   });
@@ -148,8 +183,13 @@ export function scanForDevices(
   };
 }
 
-/** Connect to a specific device and discover serial characteristics. */
-export async function connectToDevice(deviceId: string): Promise<boolean> {
+/**
+ * Connect to a specific device and discover serial characteristics.
+ * diagnostic=true (set by obdTransport when BLE_ONLY_DIAGNOSTIC is active):
+ *   - logs every service UUID and every characteristic UUID + properties
+ *   - flags which characteristic was selected as write and notify target
+ */
+export async function connectToDevice(deviceId: string, diagnostic = false): Promise<boolean> {
   const mgr = initBLE();
 
   try {
@@ -171,30 +211,58 @@ export async function connectToDevice(deviceId: string): Promise<boolean> {
     connectedDevice = device;
 
     // Find write + notify characteristics
+    // In diagnostic mode: log every service and char with full property detail
+    if (diagnostic) {
+      dlog(`[BLE-DIAG] CONNECT: Starting service/characteristic discovery for ${deviceId}`);
+    }
     const services = await device.services();
     for (const service of services) {
+      if (diagnostic) {
+        dlog(`[BLE-DIAG] CONNECT: SERVICE ${service.uuid}`);
+      }
       const chars = await service.characteristics();
       for (const char of chars) {
+        if (diagnostic) {
+          dlog(
+            `[BLE-DIAG] CONNECT:   CHAR ${char.uuid}` +
+            ` [notify=${char.isNotifiable}` +
+            ` indicate=${char.isIndicatable}` +
+            ` write=${char.isWritableWithResponse}` +
+            ` writeNoResp=${char.isWritableWithoutResponse}` +
+            ` read=${char.isReadable}]`,
+          );
+        }
         if (char.isWritableWithResponse || char.isWritableWithoutResponse) {
           if (!writeCharacteristic) {
             writeCharacteristic = char;
+            if (diagnostic) dlog(`[BLE-DIAG] CONNECT:   ^^^ Selected as WRITE target`);
           }
         }
         if (char.isNotifiable) {
           if (!notifyCharacteristic) {
             notifyCharacteristic = char;
+            if (diagnostic) dlog(`[BLE-DIAG] CONNECT:   ^^^ Selected as NOTIFY target`);
           }
         }
       }
     }
 
     if (!writeCharacteristic || !notifyCharacteristic) {
+      if (diagnostic) {
+        dlog(
+          `[BLE-DIAG] CONNECT: FAILED — missing ${!writeCharacteristic ? 'WRITE' : 'NOTIFY'} characteristic`,
+        );
+      }
       dlog('BLE: ERROR — Could not find write/notify characteristics');
       await device.cancelConnection();
       connectedDevice = null;
       return false;
     }
 
+    if (diagnostic) {
+      dlog(`[BLE-DIAG] CONNECT: Write char  = ${writeCharacteristic.uuid}`);
+      dlog(`[BLE-DIAG] CONNECT: Notify char = ${notifyCharacteristic.uuid}`);
+    }
     dlog('BLE: Found characteristics, starting notifications...');
 
     // Start monitoring notifications
