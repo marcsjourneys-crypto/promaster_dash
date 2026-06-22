@@ -165,10 +165,22 @@ export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult>
     }
   }
 
-  // Restore known-good protocol (not ATSP0/auto) to avoid full re-negotiation
+  // Restore protocol after scan.
+  //
+  // When the adapter ACCEPTED 29-bit ATSH commands (supports29bit=true), those commands
+  // may have changed the adapter's internal CAN state. In that case we must restore the
+  // exact protocol number to avoid a full re-negotiation that can fail on the dirty state.
+  //
+  // When the adapter REJECTED all 29-bit ATSH commands with '?' (supports29bit=false),
+  // the CAN state was never mutated, so ATSP0 (auto) is safe and avoids locking the
+  // adapter into 29-bit mode (which would break subsequent 11-bit Mode-01 polls).
   try {
-    await sendCommand('ATSH7DF', 2000);
-    await sendCommand(`ATSP${restoreProtocol}`, 2000);
+    if (supports29bit) {
+      await sendCommand('ATSH7DF', 2000);
+      await sendCommand(`ATSP${restoreProtocol}`, 2000);
+    } else {
+      await sendCommand('ATSP0', 2000);
+    }
     await sendCommand('ATAR', 2000);
   } catch {}
 

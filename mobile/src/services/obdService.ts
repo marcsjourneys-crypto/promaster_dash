@@ -119,6 +119,15 @@ export function getLockedProtocol(): string {
   return lockedProtocol;
 }
 
+/**
+ * Returns true when the adapter is on an 11-bit CAN protocol (ELM327 protocol 6 or 8).
+ * In 11-bit mode we can target specific ECUs via ATSH7E0/7E1/7DF.
+ * In 29-bit mode those 3-digit headers are invalid — use the adapter's default broadcast.
+ */
+function is11BitProtocol(): boolean {
+  return lockedProtocol === '6' || lockedProtocol === '8';
+}
+
 /** Set the enabled PID list (call before startPolling). */
 export function setEnabledPids(pidIds: string[]): void {
   enabledPidIds = new Set(pidIds);
@@ -287,12 +296,18 @@ export async function readDTCsNow(): Promise<{ stored: string[]; pending: string
   const wasRunning = running;
   if (wasRunning) stopPolling();
   try {
+    if (is11BitProtocol()) {
+      await sendCommand('ATSH7E0', 1500);
+    }
     const stored = parseMode03(await sendCommand('03', 5000));
     const pending = parseMode07(await sendCommand('07', 5000));
     useVehicleStore.getState().updateDTCs(stored);
     dlog(`OBD: Manual DTC read — stored: [${stored.join(', ')}], pending: [${pending.join(', ')}]`);
     return { stored, pending };
   } finally {
+    if (is11BitProtocol()) {
+      await sendCommand('ATSH7DF', 1500).catch(() => {});
+    }
     if (wasRunning) startPolling();
   }
 }
@@ -305,12 +320,21 @@ export async function clearDTCs(): Promise<boolean> {
   const wasRunning = running;
   if (wasRunning) stopPolling();
   try {
+    // Target the ECM directly in 11-bit mode — some vehicles ignore broadcast
+    // Mode 04 and only acknowledge clear commands sent to the specific ECU address.
+    if (is11BitProtocol()) {
+      await sendCommand('ATSH7E0', 1500);
+    }
     const resp = await sendCommand('04', 5000);
     const ok = resp.toUpperCase().includes('44');
     if (ok) useVehicleStore.getState().updateDTCs([]);
     dlog(`OBD: Clear DTCs (Mode 04) — response: "${resp}", success: ${ok}`);
     return ok;
   } finally {
+    // Restore broadcast header before polling resumes
+    if (is11BitProtocol()) {
+      await sendCommand('ATSH7DF', 1500).catch(() => {});
+    }
     if (wasRunning) startPolling();
   }
 }
@@ -438,13 +462,17 @@ async function pollDTCs(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function pollCoolant(): Promise<void> {
-  // Direct to ECM to avoid multi-ECU response ambiguity on 7DF broadcast
-  const shCoolant = await sendCommand('ATSH7E0', 1500);
-  if (shCoolant.includes('?')) {
-    dlog('OBD: Coolant SKIPPED — adapter rejected ATSH7E0');
-    return;
+  // In 11-bit CAN mode we target the ECM directly (7E0) to avoid multi-ECU ambiguity.
+  // In 29-bit CAN mode (e.g. protocol 7) 11-bit headers are invalid; the adapter's
+  // default 29-bit broadcast reaches the ECM and returns Mode 01 data correctly.
+  if (is11BitProtocol()) {
+    const shCoolant = await sendCommand('ATSH7E0', 1500);
+    if (shCoolant.includes('?')) {
+      dlog('OBD: Coolant SKIPPED — adapter rejected ATSH7E0');
+      return;
+    }
+    await sleep(100); // Let adapter reconfigure CAN filter
   }
-  await sleep(100); // Let adapter reconfigure CAN filter
 
   const resp = await sendCommand('0105', 2000);
   dlog(`OBD: Coolant raw: "${resp}"`);
@@ -466,9 +494,12 @@ async function pollCoolant(): Promise<void> {
     dlog(`OBD: Coolant parse FAILED for raw: "${resp}"`);
   }
 
-  // Reset header to broadcast default + flush
-  await sendCommand('ATSH7DF', 1500);
-  await sendCommand('ATAR', 1500);
+  // Only reset header + flush in 11-bit mode; setting ATSH7DF in 29-bit mode would
+  // corrupt subsequent Mode 01 polls (wrong CAN address for 29-bit protocol).
+  if (is11BitProtocol()) {
+    await sendCommand('ATSH7DF', 1500);
+    await sendCommand('ATAR', 1500);
+  }
 }
 
 async function pollVoltage(): Promise<void> {
@@ -523,10 +554,12 @@ async function pollTransTemp(): Promise<void> {
   }
 
   // Reset header to default and flush adapter receive buffer.
-  // Without the flush, the next Mode 01 poll can pick up stale data
-  // from the previous 29-bit CAN context.
-  await sendCommand('ATSH7DF', 1500);
-  await sendCommand('ATAR', 1500);
+  // Only needed in 11-bit mode — in 29-bit mode ATSH7DF is an invalid address
+  // and would corrupt subsequent Mode 01 polls.
+  if (is11BitProtocol()) {
+    await sendCommand('ATSH7DF', 1500);
+    await sendCommand('ATAR', 1500);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -578,7 +611,15 @@ async function pollMode22Pid(id: string): Promise<void> {
   const conv = MODE22_CONVERTERS[id];
   if (!conv) return;
 
-  // Set header
+  // 11-bit headers (3 hex digits like 7E0) are only valid in 11-bit CAN mode.
+  // In 29-bit mode they are accepted by some adapters but the vehicle ignores them,
+  // causing NO DATA — and the subsequent ATSH7DF reset corrupts Mode 01 polls.
+  // Skip the poll rather than leave the adapter in a broken header state.
+  if (!is11BitProtocol() && conv.header.length <= 3) {
+    dlog(`OBD: ${id} SKIPPED — 11-bit header not usable in 29-bit CAN mode`);
+    return;
+  }
+
   const shMode22 = await sendCommand(`ATSH${conv.header}`, 1500);
   if (shMode22.includes('?')) {
     dlog(`OBD: ${id} SKIPPED — adapter rejected ATSH${conv.header}`);
@@ -598,9 +639,11 @@ async function pollMode22Pid(id: string): Promise<void> {
     dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
   }
 
-  // Reset header to default + flush receive buffer
-  await sendCommand('ATSH7DF', 1500);
-  await sendCommand('ATAR', 1500);
+  // Reset header to default + flush; skip in 29-bit mode (ATSH7DF is wrong address).
+  if (is11BitProtocol()) {
+    await sendCommand('ATSH7DF', 1500);
+    await sendCommand('ATAR', 1500);
+  }
 }
 
 // ---------------------------------------------------------------------------
