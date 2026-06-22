@@ -439,7 +439,11 @@ async function pollDTCs(): Promise<void> {
 
 async function pollCoolant(): Promise<void> {
   // Direct to ECM to avoid multi-ECU response ambiguity on 7DF broadcast
-  await sendCommand('ATSH7E0', 1500);
+  const shCoolant = await sendCommand('ATSH7E0', 1500);
+  if (shCoolant.includes('?')) {
+    dlog('OBD: Coolant SKIPPED — adapter rejected ATSH7E0');
+    return;
+  }
   await sleep(100); // Let adapter reconfigure CAN filter
 
   const resp = await sendCommand('0105', 2000);
@@ -493,7 +497,13 @@ async function pollTransTemp(): Promise<void> {
   transNullLogCount = 0;
 
   // Set header for this candidate
-  await sendCommand(`ATSH${transCandidate.header}`, 1500);
+  const shTrans = await sendCommand(`ATSH${transCandidate.header}`, 1500);
+  if (shTrans.includes('?')) {
+    // Saved candidate uses a header this adapter can't handle (e.g., 29-bit on a basic clone).
+    // Header is unchanged, no cleanup needed — just skip this poll.
+    dlog(`OBD: Trans SKIPPED — adapter rejected ATSH${transCandidate.header} (re-run SCAN TRANS TEMP)`);
+    return;
+  }
   await sleep(100); // Let adapter reconfigure CAN filter
 
   const resp = await sendCommand(`22${transCandidate.did}`, 2500);
@@ -569,7 +579,11 @@ async function pollMode22Pid(id: string): Promise<void> {
   if (!conv) return;
 
   // Set header
-  await sendCommand(`ATSH${conv.header}`, 1500);
+  const shMode22 = await sendCommand(`ATSH${conv.header}`, 1500);
+  if (shMode22.includes('?')) {
+    dlog(`OBD: ${id} SKIPPED — adapter rejected ATSH${conv.header}`);
+    return;
+  }
   await sleep(100); // Let adapter reconfigure CAN filter
 
   const resp = await sendCommand(`22${conv.did}`, 2500);

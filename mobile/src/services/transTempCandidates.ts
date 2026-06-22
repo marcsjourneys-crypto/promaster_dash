@@ -12,31 +12,62 @@ export interface TransTempCandidate {
   header: string;       // CAN header (e.g., '18DA10F1' for 29-bit)
   did: string;          // DID hex (e.g., 'B010')
   twoByteMode: boolean; // Whether temp is 2-byte or 1-byte
+  is29bit: boolean;     // Requires 29-bit CAN — skipped on adapters that return '?' for ATSH18DA...
   notes: string;
 }
 
-/** Candidate list for ProMaster 62TE transmission temp. */
+/**
+ * Candidates for ProMaster 62TE transmission temp.
+ * 11-bit entries run first so adapters that lack 29-bit support still get a shot.
+ * 29-bit entries are probed and skipped automatically if the adapter rejects them.
+ */
 export const CANDIDATES: TransTempCandidate[] = [
-  // Prefer 11-bit to avoid 29-bit/11-bit protocol switching issues
   {
     name: 'PCM 11-bit B010',
     header: '7E0',
     did: 'B010',
     twoByteMode: true,
-    notes: 'Standard 11-bit CAN — preferred (avoids header switching)',
+    is29bit: false,
+    notes: 'PCM via standard 11-bit CAN',
+  },
+  {
+    name: 'TCM 11-bit B010',
+    header: '7E1',
+    did: 'B010',
+    twoByteMode: true,
+    is29bit: false,
+    notes: 'TCM via 11-bit CAN — common for 6-speed automatics',
+  },
+  {
+    name: 'TCM 11-bit 9110',
+    header: '7E1',
+    did: '9110',
+    twoByteMode: true,
+    is29bit: false,
+    notes: 'TCM alternate DID via 11-bit — confirmed via Linear Logic ScanGauge',
+  },
+  {
+    name: 'PCM 11-bit 08DF',
+    header: '7E0',
+    did: '08DF',
+    twoByteMode: true,
+    is29bit: false,
+    notes: 'PCM alternate DID via 11-bit',
   },
   {
     name: 'PCM 29-bit B010',
     header: '18DA10F1',
     did: 'B010',
     twoByteMode: true,
-    notes: 'PCM via 29-bit extended CAN',
+    is29bit: true,
+    notes: 'PCM via 29-bit extended CAN — confirmed on 2014 ProMaster with VLinker MS',
   },
   {
     name: 'TCM 29-bit B010',
     header: '18DA18F1',
     did: 'B010',
     twoByteMode: true,
+    is29bit: true,
     notes: 'TCM via 29-bit extended CAN',
   },
   {
@@ -44,21 +75,16 @@ export const CANDIDATES: TransTempCandidate[] = [
     header: '18DA18F1',
     did: '9110',
     twoByteMode: true,
-    notes: 'Alternate TCM DID — confirmed via Linear Logic ScanGauge code',
+    is29bit: true,
+    notes: 'TCM alternate DID via 29-bit — confirmed via Linear Logic ScanGauge',
   },
   {
     name: 'PCM 29-bit 1C44',
     header: '18DA10F1',
     did: '1C44',
     twoByteMode: true,
-    notes: 'PCM alternate DID, two-byte',
-  },
-  {
-    name: 'PCM 11-bit 08DF',
-    header: '7E0',
-    did: '08DF',
-    twoByteMode: true,
-    notes: 'Standard 11-bit, two-byte',
+    is29bit: true,
+    notes: 'PCM alternate DID via 29-bit, two-byte',
   },
 ];
 
@@ -67,33 +93,67 @@ export interface CandidateResult {
   tempF: number | null;
   success: boolean;
   rawResponse: string;
+  skipped?: boolean; // true when adapter lacked 29-bit CAN support — not a failure
+}
+
+export interface ScanResult {
+  results: CandidateResult[];
+  supports29bit: boolean; // false = adapter returned '?' on ATSH18DA10F1
 }
 
 /**
- * Scan all candidates and return results.
- * Must be called when BLE is connected and adapter is initialized.
+ * Scan candidates and return results with adapter 29-bit capability info.
+ *
+ * Probes 29-bit support once up front. If the adapter returns '?' for
+ * ATSH18DA10F1, all 29-bit candidates are skipped — sending Mode 22 DIDs
+ * to an adapter that rejected the header corrupts its state and breaks
+ * subsequent standard Mode 01 polling.
+ *
+ * restoreProtocol comes from ATDPN captured during adapter init (obdService),
+ * so cleanup uses ATSP<N> instead of ATSP0 (auto), avoiding full re-negotiation.
  */
-export async function scanCandidates(restoreProtocol = '0'): Promise<CandidateResult[]> {
+export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult> {
   const results: CandidateResult[] = [];
 
+  // Probe 29-bit CAN support. Cheap ELM327 clones return '?' here.
+  dlog('Trans scan: Probing 29-bit CAN support (ATSH18DA10F1)...');
+  const probeResp = await sendCommand('ATSH18DA10F1', 2000);
+  const supports29bit = !probeResp.includes('?');
+  dlog(
+    supports29bit
+      ? 'Trans scan: 29-bit CAN SUPPORTED'
+      : 'Trans scan: 29-bit CAN NOT SUPPORTED — adapter returned "?" — 29-bit candidates will be skipped',
+  );
+  // Reset header after probe regardless of outcome
+  await sendCommand('ATSH7DF', 1000);
+
   for (const candidate of CANDIDATES) {
+    // Skip 29-bit candidates on adapters that can't handle them
+    if (candidate.is29bit && !supports29bit) {
+      dlog(`Trans scan: SKIP "${candidate.name}" — adapter lacks 29-bit CAN`);
+      results.push({ candidate, tempF: null, success: false, rawResponse: '—', skipped: true });
+      continue;
+    }
+
     try {
       dlog(`Trans scan: Trying "${candidate.name}" (ATSH${candidate.header}, 22${candidate.did})...`);
-      // Set CAN header
-      await sendCommand(`ATSH${candidate.header}`, 2000);
-      // Longer delay for generic ELM327 clones that are slow to process ATSH
+
+      const shResp = await sendCommand(`ATSH${candidate.header}`, 2000);
+      if (shResp.includes('?')) {
+        // Shouldn't happen for 11-bit (7E0/7E1) but guard anyway
+        dlog(`Trans scan: SKIP "${candidate.name}" — ATSH${candidate.header} rejected`);
+        results.push({ candidate, tempF: null, success: false, rawResponse: shResp, skipped: true });
+        continue;
+      }
       await sleep(200);
 
-      // Request Mode 22 read
       const raw = await sendCommand(`22${candidate.did}`, 3000);
-
       const bytes = parseMode22(raw, candidate.did);
       let tempF: number | null = null;
       let success = false;
 
       if (bytes && bytes.length >= 1) {
         tempF = transTempToF(bytes, candidate.twoByteMode);
-        // Sanity check: -40°F to 400°F
         success = tempF >= -40 && tempF <= 400;
       }
 
@@ -101,26 +161,18 @@ export async function scanCandidates(restoreProtocol = '0'): Promise<CandidateRe
       results.push({ candidate, tempF, success, rawResponse: raw });
     } catch (e: any) {
       dlog(`Trans scan: "${candidate.name}" → ERROR: ${e.message}`);
-      results.push({
-        candidate,
-        tempF: null,
-        success: false,
-        rawResponse: e.message ?? 'Error',
-      });
+      results.push({ candidate, tempF: null, success: false, rawResponse: e.message ?? 'Error' });
     }
   }
 
-  // Reset header and restore the detected protocol.
-  // Using ATSP<N> (specific) instead of ATSP0 (auto) avoids a full re-negotiation
-  // that can fail when 29-bit ATSH commands have left the adapter in a dirty state.
-  // restoreProtocol comes from ATDPN captured during adapter init in obdService.
+  // Restore known-good protocol (not ATSP0/auto) to avoid full re-negotiation
   try {
     await sendCommand('ATSH7DF', 2000);
     await sendCommand(`ATSP${restoreProtocol}`, 2000);
     await sendCommand('ATAR', 2000);
   } catch {}
 
-  return results;
+  return { results, supports29bit };
 }
 
 /** Select the first working candidate from scan results. */

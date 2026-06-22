@@ -26,6 +26,7 @@ import {
 } from '../services/obdTransport';
 import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, loadTransCandidate, clearTransCandidate, getLockedProtocol } from '../services/obdService';
 import { scanCandidates, selectBestCandidate, type CandidateResult } from '../services/transTempCandidates';
+
 import { dlog } from '../services/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -44,6 +45,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
   const [connectedName, setConnectedName] = useState(getConnectedDeviceName());
   const [scanningTrans, setScanningTrans] = useState(false);
   const [transResults, setTransResults] = useState<CandidateResult[]>([]);
+  const [adapterSupports29bit, setAdapterSupports29bit] = useState<boolean | null>(null);
   const [savedDevice, setSavedDevice] = useState<ScannedDevice | null>(null);
   const setBleConnected = useVehicleStore((s) => s.setBleConnected);
 
@@ -113,7 +115,8 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
         if (!saved || saved.twoByteMode === false) {
           dlog('Trans: No saved candidate — scanning...');
           try {
-            const results = await scanCandidates(getLockedProtocol());
+            const { results, supports29bit } = await scanCandidates(getLockedProtocol());
+            setAdapterSupports29bit(supports29bit);
             const best = selectBestCandidate(results);
             if (best) {
               setTransCandidate(best);
@@ -150,14 +153,16 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
     setBleConnected(false);
     setTransCandidate(null);
     setTransResults([]);
+    setAdapterSupports29bit(null);
   }, [setBleConnected]);
 
   const handleScanTrans = useCallback(async () => {
     setScanningTrans(true);
     stopPolling();
     try {
-      const results = await scanCandidates(getLockedProtocol());
+      const { results, supports29bit } = await scanCandidates(getLockedProtocol());
       setTransResults(results);
+      setAdapterSupports29bit(supports29bit);
 
       const best = selectBestCandidate(results);
       if (best) {
@@ -230,6 +235,14 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
         {connected && getTransCandidate() && (
           <Text style={styles.statusDetail}>
             Trans temp: {getTransCandidate()!.name}
+          </Text>
+        )}
+        {connected && adapterSupports29bit === true && (
+          <Text style={styles.capabilityOk}>29-bit CAN: supported</Text>
+        )}
+        {connected && adapterSupports29bit === false && (
+          <Text style={styles.capabilityWarning}>
+            29-bit CAN: not supported — trans temp may be unavailable
           </Text>
         )}
       </View>
@@ -320,11 +333,22 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
       {transResults.length > 0 && (
         <View style={styles.transSection}>
           <Text style={styles.transSectionTitle}>TRANS TEMP CANDIDATES</Text>
+          {adapterSupports29bit === false && (
+            <Text style={styles.transCapabilityNote}>
+              Adapter lacks 29-bit CAN — 29-bit candidates skipped. If no 11-bit candidate worked, trans temp is not available on this adapter/vehicle combination.
+            </Text>
+          )}
           {transResults.map((r, i) => (
-            <View key={i} style={[styles.transRow, r.success && styles.transRowSuccess]}>
-              <Text style={styles.transName}>{r.candidate.name}</Text>
-              <Text style={styles.transResult}>
-                {r.success ? `${r.tempF?.toFixed(0)}°F` : 'No data'}
+            <View key={i} style={[
+              styles.transRow,
+              r.success && styles.transRowSuccess,
+              r.skipped && styles.transRowSkipped,
+            ]}>
+              <Text style={[styles.transName, r.skipped && styles.transNameDim]}>
+                {r.candidate.name}
+              </Text>
+              <Text style={[styles.transResult, r.success && styles.transResultSuccess]}>
+                {r.skipped ? '—' : r.success ? `${r.tempF?.toFixed(0)}°F` : 'No data'}
               </Text>
             </View>
           ))}
@@ -564,5 +588,31 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: fonts.sizeSm,
     fontWeight: '800',
+  },
+  transResultSuccess: {
+    color: colors.tripGreen,
+    fontWeight: '900',
+  },
+  transRowSkipped: {
+    opacity: 0.35,
+  },
+  transNameDim: {
+    color: colors.textMuted,
+  },
+  transCapabilityNote: {
+    color: colors.amber,
+    fontSize: fonts.sizeXs,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  capabilityOk: {
+    color: colors.tripGreen,
+    fontSize: fonts.sizeXs,
+    marginTop: 6,
+  },
+  capabilityWarning: {
+    color: colors.amber,
+    fontSize: fonts.sizeXs,
+    marginTop: 6,
   },
 });
