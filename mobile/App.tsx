@@ -9,6 +9,8 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AlertHistoryScreen } from './src/screens/AlertHistoryScreen';
 import { DebugLogScreen } from './src/screens/DebugLogScreen';
 import { loadSettings, type Settings, DEFAULT_SETTINGS } from './src/config/settings';
+import { loadDisclaimerStatus, saveDisclaimerAccepted } from './src/config/legalConfig';
+import { DisclaimerScreen } from './src/screens/DisclaimerScreen';
 import { setEnabledPids } from './src/services/obdService';
 import { seedDefaultSchedule, getScheduleWithStatus } from './src/services/maintenanceService';
 import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
@@ -26,6 +28,8 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [dbReady, setDbReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
+  // null = still loading (splash visible); false = not accepted; true = accepted
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState<boolean | null>(null);
 
   // Load settings and DB on startup; coordinate for maintenance reminder
   useEffect(() => {
@@ -43,9 +47,13 @@ export default function App() {
       const dbOk = dbResult.status === 'fulfilled' && dbResult.value;
       const s = settingsResult.status === 'fulfilled' ? settingsResult.value : DEFAULT_SETTINGS;
 
+      // Check disclaimer before revealing the app — fail-safe returns false on error
+      const { accepted } = await loadDisclaimerStatus();
+
       setSettings(s);
       setEnabledPids(s.enabledPids);
-      setDbReady(true);
+      setDisclaimerAccepted(accepted);
+      setDbReady(true); // triggers splash to begin hiding
 
       if (dbOk) {
         seedDefaultSchedule().catch(() => {});
@@ -91,52 +99,66 @@ export default function App() {
     setScreen('dashboard');
   }, []);
 
+  const handleDisclaimerAccept = useCallback(async () => {
+    await saveDisclaimerAccepted();
+    setDisclaimerAccepted(true);
+  }, []);
+
   return (
     <>
       <StatusBar style="light" />
       {!splashDone && (
         <AppSplash dbReady={dbReady} onReady={() => setSplashDone(true)} />
       )}
-      {screen === 'dashboard' && (
-        <DashboardScreen
-          onNavigate={handleNavigate}
-          useLiveGPS={liveMode}
-          enabledPids={settings.enabledPids}
-        />
+      {/* Disclaimer gate — blocks the entire app until accepted at current version */}
+      {splashDone && disclaimerAccepted === false && (
+        <DisclaimerScreen onAccept={handleDisclaimerAccept} />
       )}
-      {screen === 'trips' && (
-        <TripsScreen onBack={() => setScreen('dashboard')} />
-      )}
-      {screen === 'ble' && (
-        <BLEScreen onBack={() => setScreen('dashboard')} />
-      )}
-      {screen === 'settings' && (
-        <SettingsScreen
-          onBack={handleSettingsBack}
-          liveMode={liveMode}
-          onLiveModeChange={setLiveMode}
-          onNavigate={handleNavigate}
-        />
-      )}
-      {screen === 'alerts' && (
-        <AlertHistoryScreen onBack={() => setScreen('dashboard')} />
-      )}
-      {screen === 'debug' && (
-        <DebugLogScreen onBack={() => setScreen('dashboard')} />
-      )}
-      {screen === 'codes' && (
-        <CodesScreen onBack={() => setScreen('dashboard')} />
-      )}
-      {screen === 'maintenance' && (
-        <MaintenanceScreen
-          onBack={() => setScreen('dashboard')}
-          severeDuty={settings.severeDuty}
-          wizardComplete={settings.maintenanceWizardComplete}
-          onWizardComplete={(duty) => {
-            setSettings((prev) => ({ ...prev, severeDuty: duty, maintenanceWizardComplete: true }));
-            loadSettings().then((s) => setSettings(s));
-          }}
-        />
+      {/* Normal app — only rendered once disclaimer is accepted */}
+      {splashDone && disclaimerAccepted === true && (
+        <>
+          {screen === 'dashboard' && (
+            <DashboardScreen
+              onNavigate={handleNavigate}
+              useLiveGPS={liveMode}
+              enabledPids={settings.enabledPids}
+            />
+          )}
+          {screen === 'trips' && (
+            <TripsScreen onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'ble' && (
+            <BLEScreen onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'settings' && (
+            <SettingsScreen
+              onBack={handleSettingsBack}
+              liveMode={liveMode}
+              onLiveModeChange={setLiveMode}
+              onNavigate={handleNavigate}
+            />
+          )}
+          {screen === 'alerts' && (
+            <AlertHistoryScreen onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'debug' && (
+            <DebugLogScreen onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'codes' && (
+            <CodesScreen onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'maintenance' && (
+            <MaintenanceScreen
+              onBack={() => setScreen('dashboard')}
+              severeDuty={settings.severeDuty}
+              wizardComplete={settings.maintenanceWizardComplete}
+              onWizardComplete={(duty) => {
+                setSettings((prev) => ({ ...prev, severeDuty: duty, maintenanceWizardComplete: true }));
+                loadSettings().then((s) => setSettings(s));
+              }}
+            />
+          )}
+        </>
       )}
     </>
   );

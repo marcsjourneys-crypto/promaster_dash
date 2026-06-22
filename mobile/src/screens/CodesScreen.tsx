@@ -17,6 +17,7 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { readDTCsNow, clearDTCs } from '../services/obdService';
 import { getAllCodes } from '../data/dtcLookup';
 import { isConnected } from '../services/obdTransport';
+import { CLEAR_CODES_WARNING } from '../config/legalConfig';
 
 interface Props {
   onBack: () => void;
@@ -88,11 +89,11 @@ export function CodesScreen({ onBack }: Props) {
     if (!connected || clearing) return;
     Alert.alert(
       'Clear Codes',
-      'This will erase all stored DTCs and turn off the check engine light. Only do this after the underlying issue has been resolved.',
+      CLEAR_CODES_WARNING,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear',
+          text: 'Clear Codes',
           style: 'destructive',
           onPress: async () => {
             setClearing(true);
