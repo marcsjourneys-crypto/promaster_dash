@@ -14,7 +14,6 @@ import { colors, fonts } from '../config/theme';
 import {
   DISCLAIMER_TEXT,
   PRIVACY_POLICY_URL,
-  LICENSE_URL,
 } from '../config/legalConfig';
 
 interface Props {
@@ -43,10 +42,6 @@ export function DisclaimerScreen({ onAccept }: Props) {
         <View style={styles.linksRow}>
           <Pressable onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => {})}>
             <Text style={styles.link}>Privacy Policy</Text>
-          </Pressable>
-          <Text style={styles.linkSep}>·</Text>
-          <Pressable onPress={() => Linking.openURL(LICENSE_URL).catch(() => {})}>
-            <Text style={styles.link}>License Agreement</Text>
           </Pressable>
         </View>
       </ScrollView>

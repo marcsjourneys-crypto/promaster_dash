@@ -9,6 +9,7 @@ export function useMockData(enabled: boolean) {
   const updateGPS = useVehicleStore((s) => s.updateGPS);
   const updateOBD = useVehicleStore((s) => s.updateOBD);
   const updateDTCs = useVehicleStore((s) => s.updateDTCs);
+  const setBleConnected = useVehicleStore((s) => s.setBleConnected);
 
   const lat = useRef(40.7128);
   const lon = useRef(-74.006);
@@ -18,6 +19,9 @@ export function useMockData(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
+
+    // Show adapter as "connected" so the dashboard looks live
+    setBleConnected(true);
 
     const interval = setInterval(() => {
       // Drift position
@@ -59,20 +63,19 @@ export function useMockData(enabled: boolean) {
       updateOBD({
         transF: 170 + Math.random() * 95,
         coolantF: 185 + Math.random() * 57,
-        voltageV: Math.round((11.3 + Math.random() * 3.4) * 10) / 10,
+        voltageV: Math.round((13.8 + (Math.random() - 0.5) * 0.8) * 10) / 10,
         rpm: mockRpm,
         obdSpeedMph: speed.current + (Math.random() - 0.5) * 3,
         oilPressurePsi: 15 + (mockRpm / 3500) * 75 + (Math.random() - 0.5) * 8,
         oilTempF: 180 + Math.random() * 50,
         engineLoadPct: 20 + Math.random() * 60,
-        intakeMapKpa: 30 + Math.random() * 70,
-        timingAdvDeg: 5 + Math.random() * 25,
         intakeAirF: 70 + Math.random() * 60,
-        mafGps: 5 + Math.random() * 80,
-        throttlePct: Math.random() * 80,
         fuelLevelPct: 30 + Math.random() * 50,
         ambientAirF: 65 + Math.random() * 30,
-        accelPedalPct: Math.random() * 80,
+        stftBank1Pct: Math.round((Math.random() - 0.5) * 26 * 10) / 10,
+        ltftBank1Pct: Math.round(((Math.random() - 0.5) * 14 - 1.5) * 10) / 10,
+        stftBank2Pct: Math.round((Math.random() - 0.5) * 28 * 10) / 10,
+        ltftBank2Pct: Math.round((Math.random() - 0.5) * 12 * 10) / 10,
       });
 
       // Occasionally simulate a DTC
@@ -84,6 +87,9 @@ export function useMockData(enabled: boolean) {
       }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [enabled, updateGPS, updateOBD, updateDTCs]);
+    return () => {
+      clearInterval(interval);
+      setBleConnected(false);
+    };
+  }, [enabled, updateGPS, updateOBD, updateDTCs, setBleConnected]);
 }

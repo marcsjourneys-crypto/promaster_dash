@@ -27,14 +27,13 @@ export interface OBDData {
   oilPressurePsi: number | null;
   oilTempF: number | null;
   engineLoadPct: number | null;
-  intakeMapKpa: number | null;
-  timingAdvDeg: number | null;
   intakeAirF: number | null;
-  mafGps: number | null;
-  throttlePct: number | null;
   fuelLevelPct: number | null;
   ambientAirF: number | null;
-  accelPedalPct: number | null;
+  stftBank1Pct: number | null;
+  ltftBank1Pct: number | null;
+  stftBank2Pct: number | null;
+  ltftBank2Pct: number | null;
 }
 
 export interface VehicleStore extends OBDData {
@@ -69,6 +68,10 @@ export interface VehicleStore extends OBDData {
   // Night mode
   nightMode: boolean;
 
+  // Mode 01 PID discovery (for hiding unsupported gauge cards)
+  supportedMode01Pids: Set<string>;
+  mode01DiscoveryDone: boolean;
+
   // Actions
   updateGPS: (data: GPSData) => void;
   updateOBD: (data: Partial<OBDData>) => void;
@@ -80,6 +83,7 @@ export interface VehicleStore extends OBDData {
   pushAlert: (event: EventRecord) => void;
   clearAlert: () => void;
   computeAlert: () => void;
+  setSupportedMode01Pids: (pids: Set<string>) => void;
 }
 
 export const useVehicleStore = create<VehicleStore>((set, get) => ({
@@ -92,14 +96,13 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   oilPressurePsi: null,
   oilTempF: null,
   engineLoadPct: null,
-  intakeMapKpa: null,
-  timingAdvDeg: null,
   intakeAirF: null,
-  mafGps: null,
-  throttlePct: null,
   fuelLevelPct: null,
   ambientAirF: null,
-  accelPedalPct: null,
+  stftBank1Pct: null,
+  ltftBank1Pct: null,
+  stftBank2Pct: null,
+  ltftBank2Pct: null,
 
   // GPS
   speedMph: null,
@@ -121,6 +124,8 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   alertHistory: [],
   bleConnected: false,
   nightMode: false,
+  supportedMode01Pids: new Set<string>(),
+  mode01DiscoveryDone: false,
 
   updateGPS: (data: GPSData) =>
     set({
@@ -250,4 +255,6 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
     // No alerts
     set({ alertMessage: null, alertPriority: 'none' });
   },
+
+  setSupportedMode01Pids: (pids) => set({ supportedMode01Pids: pids, mode01DiscoveryDone: true }),
 }));

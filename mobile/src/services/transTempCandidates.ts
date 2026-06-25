@@ -3,7 +3,7 @@
  * Used during discovery to find which DID + header returns valid trans temp.
  */
 
-import { sendCommand } from './obdTransport';
+import { sendCommand, sendAtsh } from './obdTransport';
 import { parseMode22, transTempToF } from './obdParser';
 import { dlog } from './debugLog';
 
@@ -115,10 +115,11 @@ export interface ScanResult {
 export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult> {
   const results: CandidateResult[] = [];
 
-  // Probe 29-bit CAN support. Cheap ELM327 clones return '?' here.
+  // Probe 29-bit CAN support. sendAtsh auto-falls back to ATCP+3-byte form for
+  // cheap ELM327 clones that reject 4-byte ATSH — so `supports29bit` is true
+  // even for clones once the split form is accepted.
   dlog('Trans scan: Probing 29-bit CAN support (ATSH18DA10F1)...');
-  const probeResp = await sendCommand('ATSH18DA10F1', 2000);
-  const supports29bit = !probeResp.includes('?');
+  const supports29bit = await sendAtsh('18DA10F1');
   dlog(
     supports29bit
       ? 'Trans scan: 29-bit CAN SUPPORTED'
@@ -138,11 +139,10 @@ export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult>
     try {
       dlog(`Trans scan: Trying "${candidate.name}" (ATSH${candidate.header}, 22${candidate.did})...`);
 
-      const shResp = await sendCommand(`ATSH${candidate.header}`, 2000);
-      if (shResp.includes('?')) {
-        // Shouldn't happen for 11-bit (7E0/7E1) but guard anyway
+      const shOk = await sendAtsh(candidate.header);
+      if (!shOk) {
         dlog(`Trans scan: SKIP "${candidate.name}" — ATSH${candidate.header} rejected`);
-        results.push({ candidate, tempF: null, success: false, rawResponse: shResp, skipped: true });
+        results.push({ candidate, tempF: null, success: false, rawResponse: '?', skipped: true });
         continue;
       }
       await sleep(200);

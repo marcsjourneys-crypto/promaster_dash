@@ -32,6 +32,10 @@ function formatTripTime(startTs: number | null): string {
 /** Format a store value for display on a gauge card. */
 function formatGaugeValue(pid: PidDef, value: number | null): string {
   if (value === null) return '--';
+  // Fuel trim: signed, 1 decimal
+  if (pid.gaugeMode === 'fuel_trim') {
+    return (value > 0 ? '+' : '') + value.toFixed(1);
+  }
   // Temperatures and pressures: no decimals
   if (pid.gaugeMode === 'temp' || pid.gaugeMode === 'pressure_low') {
     return value.toFixed(0);
@@ -68,6 +72,7 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
     tripActive, tripStartTs, tripDistanceMi,
     alertMessage, alertPriority,
     bleConnected,
+    supportedMode01Pids, mode01DiscoveryDone,
   } = store;
 
   // Force re-render for trip timer
@@ -89,7 +94,12 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
 
   // Build list of enabled gauge cards from PID registry
   const enabledSet = new Set(enabledPids);
-  const enabledGauges = getSortedPids().filter((pid) => enabledSet.has(pid.id));
+  const enabledGauges = getSortedPids().filter((pid) => {
+    if (!enabledSet.has(pid.id)) return false;
+    // Hide fuel-trim gauges for PIDs the ECU reported as unsupported after discovery
+    if (pid.gaugeMode === 'fuel_trim' && mode01DiscoveryDone && !supportedMode01Pids.has(pid.pid.toUpperCase())) return false;
+    return true;
+  });
 
   return (
     <SafeAreaView style={styles.container}>

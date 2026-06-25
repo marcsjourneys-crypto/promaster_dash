@@ -31,6 +31,9 @@ export interface Settings {
   intakeAirWarnF: number;
   intakeAirCritF: number;
 
+  // Fuel trim threshold (%, absolute value)
+  fuelTrimWarnPct: number;
+
   // Trip detection
   tripStartSpeedMph: number;
   tripStopTimeoutMin: number;
@@ -53,18 +56,19 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  transWarnF: 230,
-  transCritF: 250,
-  coolantWarnF: 220,
-  coolantCritF: 230,
-  voltLow: 11.5,
+  transWarnF: 220,
+  transCritF: 245,
+  coolantWarnF: 240,
+  coolantCritF: 255,
+  voltLow: 12.2,
   voltHigh: 15,
-  oilPressureWarnPsi: 20,
-  oilPressureCritPsi: 10,
-  oilTempWarnF: 250,
-  oilTempCritF: 270,
+  oilPressureWarnPsi: 25,
+  oilPressureCritPsi: 7,
+  oilTempWarnF: 230,
+  oilTempCritF: 250,
   intakeAirWarnF: 160,
-  intakeAirCritF: 180,
+  intakeAirCritF: 200,
+  fuelTrimWarnPct: 10,
   tripStartSpeedMph: 5,
   tripStopTimeoutMin: 5,
   breadcrumbIntervalSec: 5,

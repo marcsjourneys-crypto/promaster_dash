@@ -575,3 +575,158 @@ export async function cleanupOldTrips(maxAgeDays = 365): Promise<number> {
     return 0;
   }
 }
+
+/**
+ * Seed the database with realistic demo trips for App Store review / demo mode.
+ * No-ops immediately if any trips already exist.
+ */
+export async function seedDemoTrips(): Promise<boolean> {
+  if (!db) return false;
+  try {
+    const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM trips');
+    if (row && row.count > 0) return false;
+
+    const now = Math.floor(Date.now() / 1000);
+    const DAY = 86400;
+
+    // Helper: insert a trip and return its id
+    async function insertTrip(
+      startTs: number, endTs: number, distMi: number, durationSecs: number,
+      maxTransF: number, maxCoolantF: number, avgSpeedMph: number,
+    ): Promise<number> {
+      const r = await db!.runAsync(
+        `INSERT INTO trips (start_ts, end_ts, distance_mi, duration_secs, max_trans_f, max_coolant_f, avg_speed_mph)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [startTs, endTs, distMi, durationSecs, maxTransF, maxCoolantF, avgSpeedMph],
+      );
+      return r.lastInsertRowId;
+    }
+
+    async function insertCrumb(
+      tripId: number, ts: number, lat: number, lon: number,
+      elevFt: number, speedMph: number, headingDeg: number,
+      transF: number, coolantF: number, voltageV: number, gradePct: number,
+    ): Promise<void> {
+      await db!.runAsync(
+        `INSERT INTO breadcrumbs (trip_id, ts, lat, lon, elevation_ft, speed_mph, heading_deg, trans_f, coolant_f, voltage_v, grade_pct)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [tripId, ts, lat, lon, elevFt, speedMph, headingDeg, transF, coolantF, voltageV, gradePct],
+      );
+    }
+
+    // Trip 1: Yesterday — 45 min city/highway mix, 22 miles
+    {
+      const t = now - DAY - 3600;
+      const id = await insertTrip(t, t + 2700, 22.4, 2700, 218, 197, 29.9);
+      let lat = 47.606, lon = -122.332;
+      const speeds = [18, 28, 42, 55, 58, 52, 44, 32, 22, 15];
+      for (let i = 0; i < speeds.length; i++) {
+        lat += 0.0025; lon += 0.0012;
+        await insertCrumb(id, t + i * 270, lat, lon, 415 + i * 4, speeds[i], 48,
+          208 + i * 1.1, 192 + i * 0.5, 14.2, (i % 3 - 1) * 1.5);
+      }
+    }
+
+    // Trip 2: 3 days ago — 72 min highway, 48 miles
+    {
+      const t = now - 3 * DAY - 7200;
+      const id = await insertTrip(t, t + 4320, 48.1, 4320, 226, 203, 40.1);
+      let lat = 47.606, lon = -122.332;
+      const speeds = [25, 45, 62, 68, 70, 72, 65, 58, 48, 35, 22, 15];
+      for (let i = 0; i < speeds.length; i++) {
+        lat += 0.003; lon -= 0.002;
+        await insertCrumb(id, t + i * 360, lat, lon, 378 + i * 6, speeds[i], 275,
+          216 + i * 0.9, 197 + i * 0.5, 14.1, (i % 4 - 1.5) * 1.2);
+      }
+    }
+
+    // Trip 3: Last week — 28 min short errand, 9 miles
+    {
+      const t = now - 7 * DAY - 1800;
+      const id = await insertTrip(t, t + 1680, 9.2, 1680, 211, 195, 19.7);
+      let lat = 47.606, lon = -122.332;
+      const speeds = [12, 22, 28, 30, 26, 18, 10, 8];
+      for (let i = 0; i < speeds.length; i++) {
+        lat -= 0.002; lon += 0.0018;
+        await insertCrumb(id, t + i * 210, lat, lon, 345 + i * 3, speeds[i], 138,
+          203 + i * 0.8, 191 + i * 0.4, 14.0, (i % 3 - 1) * 0.9);
+      }
+    }
+
+    console.log('Demo: seeded 3 demo trips');
+    return true;
+  } catch (e) {
+    console.warn('seedDemoTrips failed:', e);
+    return false;
+  }
+}
+
+/**
+ * Seed the maintenance_log with realistic demo entries for demo mode.
+ * No-ops immediately if any log entries already exist.
+ */
+export async function seedDemoMaintenance(): Promise<boolean> {
+  if (!db) return false;
+  try {
+    const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM maintenance_log');
+    if (row && row.count > 0) return false;
+
+    const now = new Date();
+    const dateAgo = (days: number): string => {
+      const d = new Date(now);
+      d.setDate(d.getDate() - days);
+      return d.toISOString().slice(0, 10);
+    };
+
+    const entries: {
+      service_type: string;
+      service_date: string;
+      odometer: number;
+      cost: number | null;
+      notes: string | null;
+    }[] = [
+      // Oil changes — multiple entries to show history; last ~4 months ago → DUE SOON
+      { service_type: 'oil', service_date: dateAgo(118), odometer: 87450, cost: 74.99, notes: 'Full synthetic 5W-20, Mopar filter' },
+      { service_type: 'oil', service_date: dateAgo(303), odometer: 81200, cost: 69.99, notes: null },
+      { service_type: 'oil', service_date: dateAgo(488), odometer: 74800, cost: 72.50, notes: 'Used Pennzoil Platinum' },
+      // Tire rotation — last ~5 months ago → UPCOMING
+      { service_type: 'tires_rotated', service_date: dateAgo(152), odometer: 86100, cost: 29.99, notes: null },
+      { service_type: 'tires_rotated', service_date: dateAgo(335), odometer: 79900, cost: 29.99, notes: null },
+      // Cabin air filter — last ~14 months ago → OVERDUE (12-month interval)
+      { service_type: 'cabin_air_filter', service_date: dateAgo(427), odometer: 78300, cost: 24.95, notes: 'OEM replacement' },
+      // Engine air filter — last ~8 months ago → UPCOMING
+      { service_type: 'engine_air_filter', service_date: dateAgo(248), odometer: 83500, cost: 34.99, notes: null },
+      // Transmission fluid — last ~20 months ago → UPCOMING (24-month interval)
+      { service_type: 'transmission_fluid', service_date: dateAgo(608), odometer: 65000, cost: 189.00, notes: 'ATF+4, dealer service' },
+      // Coolant — last ~3.5 years ago → still within 60-month interval
+      { service_type: 'coolant', service_date: dateAgo(1280), odometer: 42000, cost: 145.00, notes: 'Full flush at dealer' },
+      // Serpentine belt — inspected ~4 years ago
+      { service_type: 'serpentine_belt', service_date: dateAgo(1460), odometer: 35000, cost: null, notes: 'Inspected, no replacement needed' },
+    ];
+
+    for (const e of entries) {
+      await db.runAsync(
+        `INSERT INTO maintenance_log (service_type, service_date, odometer, cost, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [e.service_type, e.service_date, e.odometer, e.cost, e.notes, new Date().toISOString()],
+      );
+    }
+
+    console.log('Demo: seeded maintenance log entries');
+    return true;
+  } catch (e) {
+    console.warn('seedDemoMaintenance failed:', e);
+    return false;
+  }
+}
+
+/** Remove all trips, breadcrumbs, and maintenance records (cleans up demo data on live mode restore). */
+export async function clearDemoData(): Promise<void> {
+  if (!db) return;
+  try {
+    await db.execAsync('DELETE FROM breadcrumbs; DELETE FROM trips; DELETE FROM maintenance_log');
+    console.log('Demo: cleared demo data');
+  } catch (e) {
+    console.warn('clearDemoData failed:', e);
+  }
+}
