@@ -17,6 +17,48 @@ interface SegmentBarProps {
 }
 
 export function SegmentBar({ value, min, max, mode, warn, crit }: SegmentBarProps) {
+  // --- fuel_trim: bipolar center-zero rendering ---
+  if (mode === 'fuel_trim') {
+    const half = SEGMENT_COUNT / 2; // 7
+    const rangeHalf = (max - min) / 2; // 25 for range [-25, 25]
+    const clampedV = value === null ? 0 : Math.min(max, Math.max(min, value));
+    const leftFill = Math.round(Math.max(0, -clampedV) / rangeHalf * half);
+    const rightFill = Math.round(Math.max(0, clampedV) / rangeHalf * half);
+    const warnSeg = warn !== null ? Math.round(warn / rangeHalf * half) : half;
+
+    const fuelSegColor = (i: number): string => {
+      const dist = i < half ? (half - 1 - i) : (i - half);
+      if (dist >= warnSeg) return colors.segCrit;
+      if (dist >= Math.max(0, warnSeg - 1)) return colors.segWarn;
+      return colors.segOk;
+    };
+    const fuelIsFilled = (i: number): boolean =>
+      i < half ? (half - 1 - i) < leftFill : (i - half) < rightFill;
+
+    const trimLabel =
+      value !== null && warn !== null && Math.abs(value) > warn
+        ? value > 0 ? 'LEAN' : 'RICH'
+        : '';
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.barRow}>
+          {Array.from({ length: SEGMENT_COUNT }, (_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.segment,
+                { backgroundColor: fuelIsFilled(i) ? fuelSegColor(i) : colors.segEmpty },
+              ]}
+            />
+          ))}
+        </View>
+        {trimLabel !== '' && <Text style={styles.label}>{trimLabel}</Text>}
+      </View>
+    );
+  }
+  // --- end fuel_trim ---
+
   const filled = value === null
     ? 0
     : Math.round(

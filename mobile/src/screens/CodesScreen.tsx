@@ -98,14 +98,9 @@ export function CodesScreen({ onBack }: Props) {
           onPress: async () => {
             setClearing(true);
             try {
-              const ok = await clearDTCs();
-              setPendingCodes([]);
-              Alert.alert(
-                ok ? 'Codes Cleared' : 'Clear Failed',
-                ok
-                  ? 'All diagnostic codes have been erased.'
-                  : 'Adapter did not acknowledge the clear command.',
-              );
+              const { ok, message } = await clearDTCs();
+              if (ok) setPendingCodes([]);
+              Alert.alert(ok ? 'Codes Cleared' : 'Clear Failed', message);
             } catch (e: any) {
               Alert.alert('Clear Failed', e.message ?? 'Could not clear codes.');
             } finally {

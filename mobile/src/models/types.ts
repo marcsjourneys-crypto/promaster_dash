@@ -52,13 +52,15 @@ export interface TripRow {
 
 /** Threshold constants for gauges and alerts. */
 export const TRANS_RANGE: [number, number] = [140, 280];
-export const TRANS_WARN = 230;
-export const TRANS_CRIT = 250;
+export const TRANS_WARN = 220;
+export const TRANS_CRIT = 245;
 
-export const COOL_RANGE: [number, number] = [140, 250];
-export const COOL_WARN = 220;
-export const COOL_CRIT = 235;
+export const COOL_RANGE: [number, number] = [140, 270];
+export const COOL_WARN = 240;
+export const COOL_CRIT = 255;
 
 export const VOLT_RANGE: [number, number] = [11, 15.5];
-export const VOLT_LOW = 12;
+export const VOLT_LOW = 12.2;
 export const VOLT_HIGH = 15;
+
+export const FUEL_TRIM_WARN = 10; // %, absolute value

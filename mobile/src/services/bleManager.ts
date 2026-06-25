@@ -1,28 +1,32 @@
 /**
- * BLE connection manager for VLinker MS OBD2 adapter.
+ * BLE connection manager for ELM327-compatible OBD2 adapters.
  *
- * The VLinker MS uses SPP-over-BLE (Serial Port Profile emulation).
- * Typical UUIDs: Service FFF0, Write char FFF1, Notify char FFF2.
- * These may vary — we discover them dynamically.
+ * Most adapters use SPP-over-BLE (Serial Port Profile emulation).
+ * Common service UUIDs: FFF0, FFE0, Nordic UART, E7810A71.
+ * Write/notify characteristics are discovered dynamically by finding the
+ * first service that exposes both a writable AND a notifiable characteristic.
  */
 
 import { BleManager, Device, Characteristic, State } from 'react-native-ble-plx';
 import { Platform } from 'react-native';
 import { dlog } from './debugLog';
 
-// Known VLinker / ELM327 BLE service UUIDs to scan for
+// Known ELM327 / OBD BLE service UUIDs to scan for
 const KNOWN_SERVICE_UUIDS = [
-  'FFF0',                                     // VLinker MS typical
-  '0000FFF0-0000-1000-8000-00805F9B34FB',    // Full 128-bit form
-  'E7810A71-73AE-499D-8C15-FAA9AEF0C3F2',   // Some ELM327 clones
-  '18F0',                                     // Alternate
+  'FFF0',                                       // VLinker MS and many ELM327 clones
+  '0000FFF0-0000-1000-8000-00805F9B34FB',
+  'FFE0',                                       // Alternate ELM327 clone service
+  '0000FFE0-0000-1000-8000-00805F9B34FB',
+  '6E400001-B5A3-F393-E0A9-E50E24DCCA9E',     // Nordic UART Service
+  'E7810A71-73AE-499D-8C15-FAA9AEF0C3F2',     // Some ELM327 clones
+  '18F0',
 ];
 
 // Known name prefixes for OBD adapters
 const OBD_NAME_PREFIXES = [
   'VLINK', 'vLinker', 'VLinker',
   'OBD', 'ELM', 'IOS-V',
-  'OBDII', 'Vgate',
+  'OBDII', 'Vgate', 'V020', 'OBDBLE',
 ];
 
 let manager: BleManager | null = null;
@@ -215,12 +219,20 @@ export async function connectToDevice(deviceId: string, diagnostic = false): Pro
     if (diagnostic) {
       dlog(`[BLE-DIAG] CONNECT: Starting service/characteristic discovery for ${deviceId}`);
     }
+    // Find the first service that has BOTH a writable AND a notifiable characteristic.
+    // This skips standard GATT services like Battery (180F) which have a notifiable
+    // characteristic but no writable one — preventing them from being selected as the
+    // OBD data channel and causing empty responses on generic adapters.
     const services = await device.services();
     for (const service of services) {
       if (diagnostic) {
         dlog(`[BLE-DIAG] CONNECT: SERVICE ${service.uuid}`);
       }
       const chars = await service.characteristics();
+
+      let svcWrite: Characteristic | null = null;
+      let svcNotify: Characteristic | null = null;
+
       for (const char of chars) {
         if (diagnostic) {
           dlog(
@@ -232,18 +244,21 @@ export async function connectToDevice(deviceId: string, diagnostic = false): Pro
             ` read=${char.isReadable}]`,
           );
         }
-        if (char.isWritableWithResponse || char.isWritableWithoutResponse) {
-          if (!writeCharacteristic) {
-            writeCharacteristic = char;
-            if (diagnostic) dlog(`[BLE-DIAG] CONNECT:   ^^^ Selected as WRITE target`);
-          }
+        if (!svcWrite && (char.isWritableWithResponse || char.isWritableWithoutResponse)) {
+          svcWrite = char;
         }
-        if (char.isNotifiable) {
-          if (!notifyCharacteristic) {
-            notifyCharacteristic = char;
-            if (diagnostic) dlog(`[BLE-DIAG] CONNECT:   ^^^ Selected as NOTIFY target`);
-          }
+        if (!svcNotify && char.isNotifiable) {
+          svcNotify = char;
         }
+      }
+
+      if (svcWrite && svcNotify) {
+        writeCharacteristic = svcWrite;
+        notifyCharacteristic = svcNotify;
+        if (diagnostic) {
+          dlog(`[BLE-DIAG] CONNECT:   ^^^ Selected service ${service.uuid} for OBD (write+notify pair)`);
+        }
+        break;
       }
     }
 

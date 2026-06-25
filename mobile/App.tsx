@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AppSplash } from './src/screens/AppSplash';
@@ -15,7 +15,7 @@ import { setEnabledPids } from './src/services/obdService';
 import { seedDefaultSchedule, getScheduleWithStatus } from './src/services/maintenanceService';
 import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
 import { CodesScreen } from './src/screens/CodesScreen';
-import { initDatabase } from './src/services/loggingService';
+import { initDatabase, seedDemoTrips, seedDemoMaintenance, clearDemoData } from './src/services/loggingService';
 import { restoreTrip, tickWatchdog } from './src/services/tripManager';
 
 type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance' | 'codes';
@@ -30,6 +30,7 @@ export default function App() {
   const [splashDone, setSplashDone] = useState(false);
   // null = still loading (splash visible); false = not accepted; true = accepted
   const [disclaimerAccepted, setDisclaimerAccepted] = useState<boolean | null>(null);
+  const demoSeeded = useRef(false);
 
   // Load settings and DB on startup; coordinate for maintenance reminder
   useEffect(() => {
@@ -83,6 +84,21 @@ export default function App() {
       if (watchdogTimer) clearInterval(watchdogTimer);
     };
   }, []);
+
+  // Seed demo data when demo mode activates; clear it when switching back to live.
+  // demoSeeded ref tracks whether seeding actually ran (seed functions no-op if real
+  // data exists) so we never accidentally wipe real trips on a live→demo→live cycle.
+  useEffect(() => {
+    if (!dbReady) return;
+    if (!liveMode) {
+      Promise.all([seedDemoTrips(), seedDemoMaintenance()])
+        .then(([t, m]) => { if (t || m) demoSeeded.current = true; })
+        .catch(() => {});
+    } else if (demoSeeded.current) {
+      demoSeeded.current = false;
+      clearDemoData().catch(() => {});
+    }
+  }, [liveMode, dbReady]);
 
   const handleNavigate = useCallback((s: string) => {
     // Map any route to valid screens

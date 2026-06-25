@@ -6,7 +6,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendCommand, isConnected, getConnectedDeviceName, BLE_ONLY_DIAGNOSTIC } from './obdTransport';
+import { sendCommand, sendAtsh, isConnected, getConnectedDeviceName, BLE_ONLY_DIAGNOSTIC } from './obdTransport';
 import { dlog } from './debugLog';
 import {
   parseMode01,
@@ -19,16 +19,12 @@ import {
   obdSpeedToMph,
   transTempToF,
   bytesToLoadPct,
-  bytesToMapKpa,
-  bytesToTimingAdv,
   intakeAirToF,
-  bytesToMafGps,
-  bytesToThrottlePct,
   bytesToFuelLevelPct,
   ambientAirToF,
-  bytesToAccelPedalPct,
   bytesToOilPressurePsi,
   bytesToOilTempF,
+  bytesToFuelTrimPct,
   isNoData,
 } from './obdParser';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -92,6 +88,13 @@ let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 // Working trans temp candidate (set after discovery)
 let transCandidate: TransTempCandidate | null = null;
 
+// Mode 01 PIDs reported as supported by this vehicle's ECM (populated at init).
+// Empty set means discovery hasn't run yet — don't skip polls in that case.
+let supportedMode01Pids: Set<string> = new Set();
+
+// Per-PID first-skip log gate (avoid flooding dlog for every poll cycle)
+const pidSkipLogged: Set<string> = new Set();
+
 // Protocol number detected during init (e.g., '6' = 11-bit CAN 500k).
 // Captured via ATDPN after first successful 010C so scanCandidates() can
 // restore the exact protocol instead of re-negotiating via ATSP0.
@@ -117,6 +120,54 @@ export function getTransCandidate(): TransTempCandidate | null {
 /** Get the CAN protocol number locked during adapter init (e.g., '6' for 11-bit 500k). */
 export function getLockedProtocol(): string {
   return lockedProtocol;
+}
+
+/** Get the set of Mode 01 PID hex strings (e.g. '04', '0F') supported by this vehicle. */
+export function getSupportedMode01Pids(): Set<string> {
+  return supportedMode01Pids;
+}
+
+/**
+ * Query the vehicle's Mode 01 supported-PID bitmasks (0100, 0120, 0140) and
+ * populate `supportedMode01Pids`. Runs once at the end of initializeAdapter().
+ *
+ * Each query returns 4 bytes encoding which PIDs in that range the ECM supports.
+ * Bit 7 of byte A = first PID in range, bit 0 of byte D = last.
+ */
+async function discoverSupportedMode01Pids(): Promise<void> {
+  supportedMode01Pids = new Set();
+  pidSkipLogged.clear();
+
+  const ranges: { query: string; responsePid: string; rangeStart: number }[] = [
+    { query: '0100', responsePid: '00', rangeStart: 0x01 },
+    { query: '0120', responsePid: '20', rangeStart: 0x21 },
+    { query: '0140', responsePid: '40', rangeStart: 0x41 },
+  ];
+
+  for (const range of ranges) {
+    try {
+      const raw = await sendCommand(range.query, 2000);
+      const bytes = parseMode01(raw, range.responsePid);
+      if (!bytes || bytes.length < 4) {
+        dlog(`OBD: PID support ${range.query} — no valid response ("${raw}")`);
+        continue;
+      }
+      for (let byteIdx = 0; byteIdx < 4; byteIdx++) {
+        const byte = bytes[byteIdx] ?? 0;
+        for (let bit = 7; bit >= 0; bit--) {
+          if (byte & (1 << bit)) {
+            const pid = range.rangeStart + byteIdx * 8 + (7 - bit);
+            supportedMode01Pids.add(pid.toString(16).padStart(2, '0').toUpperCase());
+          }
+        }
+      }
+    } catch (e: any) {
+      dlog(`OBD: PID support query ${range.query} failed: ${e.message}`);
+    }
+  }
+
+  dlog(`OBD: Supported Mode 01 PIDs: [${[...supportedMode01Pids].join(', ')}]`);
+  useVehicleStore.getState().setSupportedMode01Pids(new Set(supportedMode01Pids));
 }
 
 /**
@@ -201,6 +252,11 @@ export async function initializeAdapter(): Promise<boolean> {
     } catch {}
 
     consecutiveFailures = 0;
+
+    // Discover which Mode 01 PIDs the vehicle ECM actually supports.
+    // This runs after protocol lock so bitmask queries use the correct CAN mode.
+    await discoverSupportedMode01Pids();
+
     dlog('OBD: Adapter init complete');
 
     if (BLE_ONLY_DIAGNOSTIC) {
@@ -316,25 +372,27 @@ export async function readDTCsNow(): Promise<{ stored: string[]; pending: string
  * Clear all stored DTCs (Mode 04). Pauses polling, sends clear command,
  * updates store, restarts polling. Returns true if adapter acknowledged.
  */
-export async function clearDTCs(): Promise<boolean> {
+export async function clearDTCs(): Promise<{ ok: boolean; message: string }> {
   const wasRunning = running;
   if (wasRunning) stopPolling();
   try {
-    // Target the ECM directly in 11-bit mode — some vehicles ignore broadcast
-    // Mode 04 and only acknowledge clear commands sent to the specific ECU address.
-    if (is11BitProtocol()) {
-      await sendCommand('ATSH7E0', 1500);
-    }
+    // Mode 04 is a broadcast command — send without changing the header so the
+    // adapter uses its current broadcast address (7DF / 18DB33F1). Targeting
+    // a specific ECU (ATSH7E0) can prevent acknowledgment on some vehicles.
     const resp = await sendCommand('04', 5000);
-    const ok = resp.toUpperCase().includes('44');
-    if (ok) useVehicleStore.getState().updateDTCs([]);
-    dlog(`OBD: Clear DTCs (Mode 04) — response: "${resp}", success: ${ok}`);
-    return ok;
-  } finally {
-    // Restore broadcast header before polling resumes
-    if (is11BitProtocol()) {
-      await sendCommand('ATSH7DF', 1500).catch(() => {});
+    const upper = resp.toUpperCase().replace(/\s/g, '');
+    dlog(`OBD: Clear DTCs (Mode 04) — response: "${resp}"`);
+
+    if (upper.includes('44')) {
+      useVehicleStore.getState().updateDTCs([]);
+      return { ok: true, message: 'All diagnostic codes have been erased.' };
     }
+    // NRC 0x22 = conditionsNotCorrect — Chrysler/FCA requires engine off to clear
+    if (upper.includes('7F0422')) {
+      return { ok: false, message: 'Turn the engine off (ignition on, engine off) and try again. The PCM requires the engine to be off to clear codes.' };
+    }
+    return { ok: false, message: 'PCM did not acknowledge the clear command.' };
+  } finally {
     if (wasRunning) startPolling();
   }
 }
@@ -358,7 +416,7 @@ async function pollTick(): Promise<void> {
       }
       if (now >= nextDue[entry.id]) {
         await executePoll(entry.id);
-        nextDue[entry.id] = now + entry.intervalMs;
+        nextDue[entry.id] = Date.now() + entry.intervalMs; // actual finish time, not tick-start
         polled = true;
         break; // One poll per tick
       }
@@ -527,11 +585,18 @@ async function pollTransTemp(): Promise<void> {
   }
   transNullLogCount = 0;
 
-  // Set header for this candidate
-  const shTrans = await sendCommand(`ATSH${transCandidate.header}`, 1500);
-  if (shTrans.includes('?')) {
-    // Saved candidate uses a header this adapter can't handle (e.g., 29-bit on a basic clone).
-    // Header is unchanged, no cleanup needed — just skip this poll.
+  // 11-bit headers (3 hex digits like 7E0) are only valid in 11-bit CAN mode.
+  // In 29-bit mode (e.g. ATSP7), setting ATSH7E0 and then skipping the reset
+  // (also 11-bit-only) leaves the adapter with a corrupt header that breaks all
+  // subsequent Mode 01 polls. Same guard already applied to pollMode22Pid().
+  if (!is11BitProtocol() && transCandidate.header.length <= 3) {
+    dlog(`OBD: Trans SKIPPED — 11-bit candidate not usable in 29-bit CAN mode (re-run SCAN TRANS TEMP)`);
+    return;
+  }
+
+  // Set header for this candidate (auto-falls back to ATCP+3-byte for generic clones)
+  const atshOkTrans = await sendAtsh(transCandidate.header);
+  if (!atshOkTrans) {
     dlog(`OBD: Trans SKIPPED — adapter rejected ATSH${transCandidate.header} (re-run SCAN TRANS TEMP)`);
     return;
   }
@@ -568,15 +633,14 @@ async function pollTransTemp(): Promise<void> {
 
 /** PID-to-converter mapping for standard Mode 01 PIDs. */
 const MODE01_CONVERTERS: Record<string, { pid: string; minBytes: number; convert: (b: number[]) => number; storeKey: keyof OBDData }> = {
-  engineLoadPct:  { pid: '04', minBytes: 1, convert: bytesToLoadPct,      storeKey: 'engineLoadPct' },
-  intakeMapKpa:   { pid: '0B', minBytes: 1, convert: bytesToMapKpa,       storeKey: 'intakeMapKpa' },
-  timingAdvDeg:   { pid: '0E', minBytes: 1, convert: bytesToTimingAdv,    storeKey: 'timingAdvDeg' },
-  intakeAirF:     { pid: '0F', minBytes: 1, convert: intakeAirToF,        storeKey: 'intakeAirF' },
-  mafGps:         { pid: '10', minBytes: 2, convert: bytesToMafGps,       storeKey: 'mafGps' },
-  throttlePct:    { pid: '11', minBytes: 1, convert: bytesToThrottlePct,  storeKey: 'throttlePct' },
-  fuelLevelPct:   { pid: '2F', minBytes: 1, convert: bytesToFuelLevelPct, storeKey: 'fuelLevelPct' },
-  ambientAirF:    { pid: '46', minBytes: 1, convert: ambientAirToF,       storeKey: 'ambientAirF' },
-  accelPedalPct:  { pid: '49', minBytes: 1, convert: bytesToAccelPedalPct, storeKey: 'accelPedalPct' },
+  engineLoadPct: { pid: '04', minBytes: 1, convert: bytesToLoadPct,       storeKey: 'engineLoadPct' },
+  intakeAirF:    { pid: '0F', minBytes: 1, convert: intakeAirToF,         storeKey: 'intakeAirF' },
+  fuelLevelPct:  { pid: '2F', minBytes: 1, convert: bytesToFuelLevelPct,  storeKey: 'fuelLevelPct' },
+  ambientAirF:   { pid: '46', minBytes: 1, convert: ambientAirToF,        storeKey: 'ambientAirF' },
+  stftBank1Pct:  { pid: '06', minBytes: 1, convert: bytesToFuelTrimPct,   storeKey: 'stftBank1Pct' },
+  ltftBank1Pct:  { pid: '07', minBytes: 1, convert: bytesToFuelTrimPct,   storeKey: 'ltftBank1Pct' },
+  stftBank2Pct:  { pid: '08', minBytes: 1, convert: bytesToFuelTrimPct,   storeKey: 'stftBank2Pct' },
+  ltftBank2Pct:  { pid: '09', minBytes: 1, convert: bytesToFuelTrimPct,   storeKey: 'ltftBank2Pct' },
 };
 
 async function pollMode01Pid(id: string): Promise<void> {
@@ -584,6 +648,29 @@ async function pollMode01Pid(id: string): Promise<void> {
   if (!conv) {
     dlog(`OBD: Unknown PID id "${id}"`);
     return;
+  }
+
+  // Skip PIDs the ECM reported as unsupported in the init bitmask scan.
+  // Only gate when discovery has run (non-empty set); empty = discovery not done, poll anyway.
+  if (supportedMode01Pids.size > 0 && !supportedMode01Pids.has(conv.pid.toUpperCase())) {
+    if (!pidSkipLogged.has(id)) {
+      dlog(`OBD: ${id} SKIPPED — PID 0x${conv.pid} not in vehicle support bitmask`);
+      pidSkipLogged.add(id);
+    }
+    return;
+  }
+
+  // In 11-bit CAN mode, target the ECM directly (ATSH7E0) rather than broadcast (7DF).
+  // The ProMaster's PCM responds to optional Mode 01 PIDs only on targeted queries,
+  // not on broadcast — the same pattern used by pollCoolant for the same reason.
+  // In 29-bit mode, 11-bit headers are invalid; skip the header commands entirely.
+  if (is11BitProtocol()) {
+    const sh = await sendCommand('ATSH7E0', 1500);
+    if (sh.includes('?')) {
+      dlog(`OBD: ${id} SKIPPED — adapter rejected ATSH7E0`);
+      return;
+    }
+    await sleep(100);
   }
 
   const resp = await sendCommand(`01${conv.pid}`, 2000);
@@ -596,6 +683,13 @@ async function pollMode01Pid(id: string): Promise<void> {
   } else {
     dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
   }
+
+  // Reset header to broadcast + flush adapter buffer.
+  // Skip in 29-bit mode — ATSH7DF is an invalid 11-bit address and would corrupt state.
+  if (is11BitProtocol()) {
+    await sendCommand('ATSH7DF', 1500);
+    await sendCommand('ATAR', 1500);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -604,7 +698,7 @@ async function pollMode01Pid(id: string): Promise<void> {
 
 const MODE22_CONVERTERS: Record<string, { did: string; header: string; minBytes: number; convert: (b: number[]) => number; storeKey: keyof OBDData }> = {
   oilPressurePsi: { did: '022A', header: '18DA10F1', minBytes: 1, convert: bytesToOilPressurePsi, storeKey: 'oilPressurePsi' },
-  oilTempF:       { did: '0121', header: '7E0',      minBytes: 1, convert: bytesToOilTempF,       storeKey: 'oilTempF' },
+  oilTempF:       { did: '0121', header: '18DA10F1', minBytes: 1, convert: bytesToOilTempF,       storeKey: 'oilTempF' },
 };
 
 async function pollMode22Pid(id: string): Promise<void> {
@@ -620,8 +714,8 @@ async function pollMode22Pid(id: string): Promise<void> {
     return;
   }
 
-  const shMode22 = await sendCommand(`ATSH${conv.header}`, 1500);
-  if (shMode22.includes('?')) {
+  const atshOk22 = await sendAtsh(conv.header);
+  if (!atshOk22) {
     dlog(`OBD: ${id} SKIPPED — adapter rejected ATSH${conv.header}`);
     return;
   }

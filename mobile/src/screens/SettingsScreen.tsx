@@ -167,14 +167,15 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
             {enabledSet.has('transF') && (
               <>
                 <Text style={styles.sectionHeader}>TRANS TEMP</Text>
+                <Text style={styles.thresholdHint}>{'Recommended 170\u2013210\u00b0F  \u00b7  Critical 245\u00b0F'}</Text>
                 <ValueStepper
                   label="Warning"
-                  min={200} max={260} value={settings.transWarnF} suffix={'\u00b0F'}
+                  min={180} max={240} value={settings.transWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('transWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={220} max={280} value={settings.transCritF} suffix={'\u00b0F'}
+                  min={200} max={265} value={settings.transCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('transCritF', v)}
                 />
               </>
@@ -183,14 +184,15 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
             {enabledSet.has('coolantF') && (
               <>
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>COOLANT TEMP</Text>
+                <Text style={styles.thresholdHint}>{'Normal 195\u2013230\u00b0F (Pentastar runs hot)  \u00b7  Critical 255\u00b0F'}</Text>
                 <ValueStepper
                   label="Warning"
-                  min={200} max={240} value={settings.coolantWarnF} suffix={'\u00b0F'}
+                  min={215} max={260} value={settings.coolantWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('coolantWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={210} max={250} value={settings.coolantCritF} suffix={'\u00b0F'}
+                  min={230} max={275} value={settings.coolantCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('coolantCritF', v)}
                 />
               </>
@@ -199,9 +201,10 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
             {enabledSet.has('voltageV') && (
               <>
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>VOLTAGE</Text>
+                <Text style={styles.thresholdHint}>{'Normal 13.5\u201314.7V  \u00b7  Low alert 12.2V'}</Text>
                 <ValueStepper
                   label="Low"
-                  min={10} max={12.5} value={settings.voltLow} suffix="V" decimals={1} step={0.1}
+                  min={10} max={13.5} value={settings.voltLow} suffix="V" decimals={1} step={0.1}
                   onChange={(v) => update('voltLow', v)}
                 />
                 <ValueStepper
@@ -215,14 +218,15 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
             {enabledSet.has('oilPressurePsi') && (
               <>
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>OIL PRESSURE</Text>
+                <Text style={styles.thresholdHint}>{'Normal 30\u201360 PSI driving  \u00b7  Critical below 7 PSI'}</Text>
                 <ValueStepper
                   label="Warning (below)"
-                  min={10} max={30} value={settings.oilPressureWarnPsi} suffix=" PSI"
+                  min={10} max={45} value={settings.oilPressureWarnPsi} suffix=" PSI"
                   onChange={(v) => update('oilPressureWarnPsi', v)}
                 />
                 <ValueStepper
                   label="Critical (below)"
-                  min={5} max={20} value={settings.oilPressureCritPsi} suffix=" PSI"
+                  min={3} max={20} value={settings.oilPressureCritPsi} suffix=" PSI"
                   onChange={(v) => update('oilPressureCritPsi', v)}
                 />
               </>
@@ -231,14 +235,15 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
             {enabledSet.has('oilTempF') && (
               <>
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>OIL TEMP</Text>
+                <Text style={styles.thresholdHint}>{'Normal 200\u2013220\u00b0F  \u00b7  Critical 250\u00b0F'}</Text>
                 <ValueStepper
                   label="Warning"
-                  min={220} max={270} value={settings.oilTempWarnF} suffix={'\u00b0F'}
+                  min={190} max={255} value={settings.oilTempWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('oilTempWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={240} max={300} value={settings.oilTempCritF} suffix={'\u00b0F'}
+                  min={210} max={275} value={settings.oilTempCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('oilTempCritF', v)}
                 />
               </>
@@ -247,21 +252,37 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
             {enabledSet.has('intakeAirF') && (
               <>
                 <Text style={[styles.sectionHeader, { marginTop: 20 }]}>INTAKE AIR TEMP</Text>
+                <Text style={styles.thresholdHint}>{'Normal 70\u2013120\u00b0F  \u00b7  Critical 200\u00b0F'}</Text>
                 <ValueStepper
                   label="Warning"
-                  min={140} max={180} value={settings.intakeAirWarnF} suffix={'\u00b0F'}
+                  min={120} max={200} value={settings.intakeAirWarnF} suffix={'\u00b0F'}
                   onChange={(v) => update('intakeAirWarnF', v)}
                 />
                 <ValueStepper
                   label="Critical"
-                  min={160} max={200} value={settings.intakeAirCritF} suffix={'\u00b0F'}
+                  min={140} max={230} value={settings.intakeAirCritF} suffix={'\u00b0F'}
                   onChange={(v) => update('intakeAirCritF', v)}
                 />
               </>
             )}
 
+            {(enabledSet.has('stftBank1Pct') || enabledSet.has('ltftBank1Pct') ||
+              enabledSet.has('stftBank2Pct') || enabledSet.has('ltftBank2Pct')) && (
+              <>
+                <Text style={[styles.sectionHeader, { marginTop: 20 }]}>FUEL TRIM</Text>
+                <Text style={styles.thresholdHint}>{'Normal ±5%  ·  Concern beyond ±10%'}</Text>
+                <ValueStepper
+                  label="Warning (absolute %)"
+                  min={3} max={25} value={settings.fuelTrimWarnPct} suffix="%" step={1}
+                  onChange={(v) => update('fuelTrimWarnPct', v)}
+                />
+              </>
+            )}
+
             {!enabledSet.has('transF') && !enabledSet.has('coolantF') && !enabledSet.has('voltageV') &&
-             !enabledSet.has('oilPressurePsi') && !enabledSet.has('oilTempF') && !enabledSet.has('intakeAirF') && (
+             !enabledSet.has('oilPressurePsi') && !enabledSet.has('oilTempF') && !enabledSet.has('intakeAirF') &&
+             !enabledSet.has('stftBank1Pct') && !enabledSet.has('ltftBank1Pct') &&
+             !enabledSet.has('stftBank2Pct') && !enabledSet.has('ltftBank2Pct') && (
               <Text style={styles.infoText}>
                 No gauges with configurable thresholds are enabled.{'\n'}
                 Enable gauges in the GAUGES tab first.
@@ -463,6 +484,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   infoText: { color: 'rgba(150, 145, 135, 0.78)', fontSize: fonts.sizeXs, marginTop: 16, lineHeight: 18 },
+  thresholdHint: { color: 'rgba(150, 145, 135, 0.78)', fontSize: fonts.sizeXs, marginTop: -4, marginBottom: 6 },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',

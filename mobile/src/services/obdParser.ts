@@ -209,29 +209,9 @@ export function bytesToLoadPct(bytes: number[]): number {
   return (bytes[0] * 100) / 255;
 }
 
-/** Mode 01 PID 0B: Intake MAP. A (kPa) */
-export function bytesToMapKpa(bytes: number[]): number {
-  return bytes[0];
-}
-
-/** Mode 01 PID 0E: Timing advance. A / 2 - 64 (degrees) */
-export function bytesToTimingAdv(bytes: number[]): number {
-  return bytes[0] / 2 - 64;
-}
-
 /** Mode 01 PID 0F: Intake air temp. A - 40 (°C) → °F */
 export function intakeAirToF(bytes: number[]): number {
   return ((bytes[0] - 40) * 9) / 5 + 32;
-}
-
-/** Mode 01 PID 10: MAF flow rate. (A*256+B) / 100 (g/s) */
-export function bytesToMafGps(bytes: number[]): number {
-  return (bytes[0] * 256 + bytes[1]) / 100;
-}
-
-/** Mode 01 PID 11: Throttle position. A * 100 / 255 (%) */
-export function bytesToThrottlePct(bytes: number[]): number {
-  return (bytes[0] * 100) / 255;
 }
 
 /** Mode 01 PID 2F: Fuel tank level. A * 100 / 255 (%) */
@@ -244,11 +224,6 @@ export function ambientAirToF(bytes: number[]): number {
   return ((bytes[0] - 40) * 9) / 5 + 32;
 }
 
-/** Mode 01 PID 49: Accelerator pedal position. A * 100 / 255 (%) */
-export function bytesToAccelPedalPct(bytes: number[]): number {
-  return (bytes[0] * 100) / 255;
-}
-
 /** Mode 22 DID 022A: Oil pressure. A * 29 / 50 (PSI) */
 export function bytesToOilPressurePsi(bytes: number[]): number {
   return (bytes[0] * 29) / 50;
@@ -258,3 +233,9 @@ export function bytesToOilPressurePsi(bytes: number[]): number {
 export function bytesToOilTempF(bytes: number[]): number {
   return (bytes[0] - 64) * 1.8 + 32;
 }
+
+/** Mode 01 PIDs 06/07/08/09: Fuel trim. (A − 128) × 100 / 128 (%). 0x80 → 0%, 0x00 → −100%, 0xFF → +99.2%. */
+export function bytesToFuelTrimPct(bytes: number[]): number {
+  return (bytes[0] - 128) * 100 / 128;
+}
+

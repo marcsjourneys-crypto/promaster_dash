@@ -31,6 +31,11 @@ export type TransportType = 'mfi' | 'ble';
 
 let activeTransport: TransportType = 'ble';
 
+// Tracks whether this adapter needs ATCP + 3-byte ATSH instead of 4-byte ATSH.
+// Cheap ELM327 clones reject "ATSH18DA10F1" with '?' but accept the split form.
+// Reset on each new connection so swapping adapters re-probes.
+let shortAtsh = false;
+
 /** Set which transport to use. */
 export function setTransport(type: TransportType): void {
   if (BLE_ONLY_DIAGNOSTIC) {
@@ -81,6 +86,7 @@ export async function scanForDevices(
 
 /** Connect to a device by ID. */
 export async function connectToDevice(deviceId: string): Promise<boolean> {
+  shortAtsh = false; // re-probe ATSH format on each new connection
   if (BLE_ONLY_DIAGNOSTIC) {
     return BLE.connectToDevice(deviceId, true);
   }
@@ -136,6 +142,30 @@ export async function sendCommand(
   } else {
     return BLE.sendCommand(command, timeoutMs);
   }
+}
+
+/**
+ * Send ATSH to set the CAN header and return whether it was accepted.
+ * For 8-char (4-byte) 29-bit headers: tries the full form first; on first '?'
+ * rejection, falls back to ATCP + 3-byte ATSH and remembers for this connection.
+ * 3-char (3-byte, 11-bit) headers pass through to a plain sendCommand.
+ */
+export async function sendAtsh(header: string): Promise<boolean> {
+  if (header.length === 8 && shortAtsh) {
+    await sendCommand(`ATCP${header.substring(0, 2)}`, 1500);
+    const r = await sendCommand(`ATSH${header.substring(2)}`, 1500);
+    return !r.includes('?');
+  }
+  const r = await sendCommand(`ATSH${header}`, 1500);
+  if (!r.includes('?')) return true;
+  if (header.length === 8) {
+    dlog('OBD: 4-byte ATSH rejected — switching to ATCP + 3-byte split form for this connection');
+    shortAtsh = true;
+    await sendCommand(`ATCP${header.substring(0, 2)}`, 1500);
+    const r2 = await sendCommand(`ATSH${header.substring(2)}`, 1500);
+    return !r2.includes('?');
+  }
+  return false;
 }
 
 /** Register disconnect callback. Returns cleanup function. */
