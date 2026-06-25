@@ -24,8 +24,17 @@
 export const BLE_ONLY_DIAGNOSTIC = false;
 
 import * as BLE from './bleManager';
-import * as BTClassic from './btClassicManager';
 import { dlog } from './debugLog';
+
+// btClassicManager is lazy-loaded on first MFi use so its import of
+// react-native-bluetooth-classic (EA native module) doesn't run at startup
+// in BLE-only builds where the EA framework isn't linked.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _btClassic: typeof import('./btClassicManager') | null = null;
+async function getBTClassic(): Promise<typeof import('./btClassicManager')> {
+  if (!_btClassic) _btClassic = await import('./btClassicManager');
+  return _btClassic;
+}
 
 export type TransportType = 'mfi' | 'ble';
 
@@ -71,6 +80,7 @@ export async function scanForDevices(
   }
   if (activeTransport === 'mfi') {
     // MFi: paired/connected devices appear via External Accessory
+    const BTClassic = await getBTClassic();
     const devices = await BTClassic.getPairedDevices();
     for (const d of devices) {
       onFound(d);
@@ -91,7 +101,7 @@ export async function connectToDevice(deviceId: string): Promise<boolean> {
     return BLE.connectToDevice(deviceId, true);
   }
   if (activeTransport === 'mfi') {
-    return BTClassic.connectToDevice(deviceId);
+    return (await getBTClassic()).connectToDevice(deviceId);
   } else {
     return BLE.connectToDevice(deviceId, false);
   }
@@ -100,7 +110,7 @@ export async function connectToDevice(deviceId: string): Promise<boolean> {
 /** Disconnect. */
 export async function disconnect(): Promise<void> {
   if (activeTransport === 'mfi') {
-    await BTClassic.disconnect();
+    await (await getBTClassic()).disconnect();
   } else {
     await BLE.disconnect();
   }
@@ -109,7 +119,7 @@ export async function disconnect(): Promise<void> {
 /** Check if connected. */
 export function isConnected(): boolean {
   if (activeTransport === 'mfi') {
-    return BTClassic.isConnected();
+    return _btClassic?.isConnected() ?? false;
   } else {
     return BLE.isConnected();
   }
@@ -118,7 +128,7 @@ export function isConnected(): boolean {
 /** Get connected device name. */
 export function getConnectedDeviceName(): string | null {
   if (activeTransport === 'mfi') {
-    return BTClassic.getConnectedDeviceName();
+    return _btClassic?.getConnectedDeviceName() ?? null;
   } else {
     return BLE.getConnectedDeviceName();
   }
@@ -138,7 +148,7 @@ export async function sendCommand(
     return resp;
   }
   if (activeTransport === 'mfi') {
-    return BTClassic.sendCommand(command, timeoutMs);
+    return (await getBTClassic()).sendCommand(command, timeoutMs);
   } else {
     return BLE.sendCommand(command, timeoutMs);
   }
@@ -171,7 +181,7 @@ export async function sendAtsh(header: string): Promise<boolean> {
 /** Register disconnect callback. Returns cleanup function. */
 export function onDisconnect(callback: () => void): () => void {
   if (activeTransport === 'mfi') {
-    return BTClassic.onDisconnect(callback);
+    return _btClassic?.onDisconnect(callback) ?? (() => {});
   } else {
     return BLE.onDisconnect(callback);
   }
