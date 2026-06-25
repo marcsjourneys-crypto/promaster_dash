@@ -49,8 +49,13 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
   const [savedDevice, setSavedDevice] = useState<ScannedDevice | null>(null);
   const setBleConnected = useVehicleStore((s) => s.setBleConnected);
 
-  // Check connection on mount and load saved device
+  // Check connection on mount and load saved device.
+  // Force BLE transport — MFi is hidden in this build.
   useEffect(() => {
+    if (getTransport() !== 'ble') {
+      setTransport('ble');
+      setTransportState('ble');
+    }
     setConnected(isConnected());
     setConnectedName(getConnectedDeviceName());
     AsyncStorage.getItem(LAST_DEVICE_KEY).then((raw) => {
@@ -192,37 +197,15 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
         <Text style={styles.title}>OBD2 CONNECTION</Text>
       </View>
 
-      {/* Transport Toggle */}
+      {/* Transport — BLE only in this build */}
       <View style={styles.transportRow}>
-        <Pressable
-          style={[styles.transportBtn, transport === 'mfi' && styles.transportActive]}
-          onPress={handleToggleTransport}
-          disabled={connected}
-        >
-          <Text style={[styles.transportBtnText, transport === 'mfi' && styles.transportActiveText]}>
-            MFi (Classic BT)
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.transportBtn, transport === 'ble' && styles.transportActive]}
-          onPress={handleToggleTransport}
-          disabled={connected}
-        >
-          <Text style={[styles.transportBtnText, transport === 'ble' && styles.transportActiveText]}>
-            BLE
-          </Text>
-        </Pressable>
+        <View style={[styles.transportBtn, styles.transportActive]}>
+          <Text style={[styles.transportBtnText, styles.transportActiveText]}>BLE</Text>
+        </View>
       </View>
-      {transport === 'mfi' && (
-        <Text style={styles.transportNote}>
-          MFi mode: Full multi-CAN support (HS/MS/SW/CH/LS-CAN). VLinker MS must be in MFi mode and paired in iOS Settings → Bluetooth.
-        </Text>
-      )}
-      {transport === 'ble' && (
-        <Text style={styles.transportNote}>
-          BLE mode: Use VgateFwUpdater app to switch VLinker MS to BLE+BT mode first.
-        </Text>
-      )}
+      <Text style={styles.transportNote}>
+        BLE mode: Use VgateFwUpdater app to switch VLinker MS to BLE+BT mode first.
+      </Text>
 
       {/* Connection Status */}
       <View style={[styles.statusCard, connected ? styles.statusConnected : styles.statusDisconnected]}>
