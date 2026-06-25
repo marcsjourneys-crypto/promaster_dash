@@ -21,8 +21,7 @@
         "NSBluetoothAlwaysUsageDescription": "ProMaster Dash connects to your VLinker OBD2 adapter via Bluetooth to read vehicle data.",
         "UIBackgroundModes": [
           "location",
-          "bluetooth-central",
-          "external-accessory"
+          "bluetooth-central"
         ],
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -62,15 +61,7 @@
           "isIosBackgroundLocationEnabled": true
         }
       ],
-      "expo-sqlite",
-      [
-        "./plugins/withExternalAccessory",
-        {
-          "protocols": [
-            "com.vgatemall"
-          ]
-        }
-      ]
+      "expo-sqlite"
     ],
     "extra": {
       "eas": {
