@@ -30,7 +30,7 @@ import {
 import { useVehicleStore } from '../store/vehicleStore';
 import type { OBDData } from '../store/vehicleStore';
 import { PID_REGISTRY, type PidDef } from '../config/pidRegistry';
-import type { TransTempCandidate } from './transTempCandidates';
+import { CANDIDATES, type TransTempCandidate } from './transTempCandidates';
 
 const TRANS_CANDIDATE_KEY = '@promaster/transCandidate';
 
@@ -177,6 +177,16 @@ async function discoverSupportedMode01Pids(): Promise<void> {
  */
 function is11BitProtocol(): boolean {
   return lockedProtocol === '6' || lockedProtocol === '8';
+}
+
+/**
+ * Functional broadcast header for the locked CAN protocol.
+ * 11-bit (protocol 6/8) uses 7DF; 29-bit (protocol 7/9) uses 18DB33F1.
+ * Resetting to a wrong-width broadcast leaves fragile clones (e.g. V020) unable
+ * to answer any subsequent PID, so every header reset must go through here.
+ */
+function broadcastHeader(): string {
+  return is11BitProtocol() ? '7DF' : '18DB33F1';
 }
 
 /** Set the enabled PID list (call before startPolling). */
@@ -362,7 +372,7 @@ export async function readDTCsNow(): Promise<{ stored: string[]; pending: string
     return { stored, pending };
   } finally {
     if (is11BitProtocol()) {
-      await sendCommand('ATSH7DF', 1500).catch(() => {});
+      await sendCommand(`ATSH${broadcastHeader()}`, 1500).catch(() => {});
     }
     if (wasRunning) startPolling();
   }
@@ -552,10 +562,9 @@ async function pollCoolant(): Promise<void> {
     dlog(`OBD: Coolant parse FAILED for raw: "${resp}"`);
   }
 
-  // Only reset header + flush in 11-bit mode; setting ATSH7DF in 29-bit mode would
-  // corrupt subsequent Mode 01 polls (wrong CAN address for 29-bit protocol).
+  // Reset header + flush only when we changed it (11-bit ECM targeting above).
   if (is11BitProtocol()) {
-    await sendCommand('ATSH7DF', 1500);
+    await sendCommand(`ATSH${broadcastHeader()}`, 1500);
     await sendCommand('ATAR', 1500);
   }
 }
@@ -585,13 +594,22 @@ async function pollTransTemp(): Promise<void> {
   }
   transNullLogCount = 0;
 
-  // 11-bit headers (3 hex digits like 7E0) are only valid in 11-bit CAN mode.
-  // In 29-bit mode (e.g. ATSP7), setting ATSH7E0 and then skipping the reset
-  // (also 11-bit-only) leaves the adapter with a corrupt header that breaks all
-  // subsequent Mode 01 polls. Same guard already applied to pollMode22Pid().
-  if (!is11BitProtocol() && transCandidate.header.length <= 3) {
-    dlog(`OBD: Trans SKIPPED — 11-bit candidate not usable in 29-bit CAN mode (re-run SCAN TRANS TEMP)`);
-    return;
+  // The saved candidate's CAN header width must match the locked protocol: an
+  // 11-bit header (e.g. 7E0) is invalid in 29-bit mode and vice-versa, and
+  // sending a wrong-width ATSH then poisons fragile clones (e.g. V020). But the
+  // trans DATA is the same on either bus — only the CAN address differs — so
+  // auto-switch to the same DID at the correct width rather than failing. Falls
+  // back to skip + re-scan only if no matching-width sibling exists.
+  const protocolIs29 = !is11BitProtocol();
+  if ((transCandidate.header.length > 3) !== protocolIs29) {
+    const savedDid = transCandidate.did;
+    const sibling = CANDIDATES.find(c => c.did === savedDid && c.is29bit === protocolIs29);
+    if (!sibling) {
+      dlog(`OBD: Trans SKIPPED — no ${protocolIs29 ? '29' : '11'}-bit candidate for DID ${savedDid} (re-run SCAN TRANS TEMP)`);
+      return;
+    }
+    dlog(`OBD: Trans — saved candidate wrong CAN width for ATSP${lockedProtocol}; auto-switching to "${sibling.name}" (header ${sibling.header})`);
+    transCandidate = sibling;
   }
 
   // Set header for this candidate (auto-falls back to ATCP+3-byte for generic clones)
@@ -618,13 +636,12 @@ async function pollTransTemp(): Promise<void> {
     dlog(`OBD: Trans parse FAILED for raw: "${resp}"`);
   }
 
-  // Reset header to default and flush adapter receive buffer.
-  // Only needed in 11-bit mode — in 29-bit mode ATSH7DF is an invalid address
-  // and would corrupt subsequent Mode 01 polls.
-  if (is11BitProtocol()) {
-    await sendCommand('ATSH7DF', 1500);
-    await sendCommand('ATAR', 1500);
-  }
+  // Reset the header to the protocol's functional broadcast and flush. Run this
+  // unconditionally: after a 29-bit trans poll the header sits on the candidate's
+  // physical address (e.g. 18DA10F1), so it must return to 18DB33F1 or the
+  // following Mode 01 polls stop reaching the ECM.
+  await sendCommand(`ATSH${broadcastHeader()}`, 1500);
+  await sendCommand('ATAR', 1500);
 }
 
 // ---------------------------------------------------------------------------
@@ -684,10 +701,9 @@ async function pollMode01Pid(id: string): Promise<void> {
     dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
   }
 
-  // Reset header to broadcast + flush adapter buffer.
-  // Skip in 29-bit mode — ATSH7DF is an invalid 11-bit address and would corrupt state.
+  // Reset header + flush only when we changed it (11-bit ECM targeting above).
   if (is11BitProtocol()) {
-    await sendCommand('ATSH7DF', 1500);
+    await sendCommand(`ATSH${broadcastHeader()}`, 1500);
     await sendCommand('ATAR', 1500);
   }
 }
@@ -705,12 +721,11 @@ async function pollMode22Pid(id: string): Promise<void> {
   const conv = MODE22_CONVERTERS[id];
   if (!conv) return;
 
-  // 11-bit headers (3 hex digits like 7E0) are only valid in 11-bit CAN mode.
-  // In 29-bit mode they are accepted by some adapters but the vehicle ignores them,
-  // causing NO DATA — and the subsequent ATSH7DF reset corrupts Mode 01 polls.
-  // Skip the poll rather than leave the adapter in a broken header state.
-  if (!is11BitProtocol() && conv.header.length <= 3) {
-    dlog(`OBD: ${id} SKIPPED — 11-bit header not usable in 29-bit CAN mode`);
+  // The header width must match the locked protocol (see pollTransTemp). Skip
+  // rather than send a wrong-width ATSH that corrupts fragile clones.
+  const convIs29 = conv.header.length > 3;
+  if (convIs29 !== !is11BitProtocol()) {
+    dlog(`OBD: ${id} SKIPPED — header ${conv.header} wrong CAN width for ATSP${lockedProtocol}`);
     return;
   }
 
@@ -733,11 +748,10 @@ async function pollMode22Pid(id: string): Promise<void> {
     dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
   }
 
-  // Reset header to default + flush; skip in 29-bit mode (ATSH7DF is wrong address).
-  if (is11BitProtocol()) {
-    await sendCommand('ATSH7DF', 1500);
-    await sendCommand('ATAR', 1500);
-  }
+  // Reset header to the protocol's functional broadcast + flush. Unconditional —
+  // see pollTransTemp for why leaving a physical header set breaks Mode 01.
+  await sendCommand(`ATSH${broadcastHeader()}`, 1500);
+  await sendCommand('ATAR', 1500);
 }
 
 // ---------------------------------------------------------------------------

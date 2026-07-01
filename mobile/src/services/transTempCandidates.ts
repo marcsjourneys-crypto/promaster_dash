@@ -128,7 +128,20 @@ export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult>
   // Reset header after probe regardless of outcome
   await sendCommand('ATSH7DF', 1000);
 
+  // Only try candidates whose CAN width matches the locked protocol. An 11-bit
+  // candidate (7E0) can't be polled in 29-bit mode and vice-versa, so saving one
+  // the poll loop would then skip leaves trans permanently "NO DATA". This keeps
+  // the scan result consistent with pollTransTemp's width guard.
+  const protocolIs29bit = !(restoreProtocol === '6' || restoreProtocol === '8');
+
   for (const candidate of CANDIDATES) {
+    // Skip candidates whose CAN width doesn't match the locked protocol
+    if (candidate.is29bit !== protocolIs29bit) {
+      dlog(`Trans scan: SKIP "${candidate.name}" — ${candidate.is29bit ? '29' : '11'}-bit candidate, protocol is ATSP${restoreProtocol}`);
+      results.push({ candidate, tempF: null, success: false, rawResponse: '—', skipped: true });
+      continue;
+    }
+
     // Skip 29-bit candidates on adapters that can't handle them
     if (candidate.is29bit && !supports29bit) {
       dlog(`Trans scan: SKIP "${candidate.name}" — adapter lacks 29-bit CAN`);
