@@ -72,8 +72,8 @@ const MIN_SPAN_DEG = 0.002;
 
 // Half-span used when widening a too-small axis. The 1.0001 safety factor
 // absorbs double-precision rounding at earth-coordinate magnitudes (e.g.
-// 47.601 - 47.599 === 0.001999999999995339), guaranteeing the widened span
-// still measures >= MIN_SPAN_DEG.
+// (47.6 + 0.001) - (47.6 - 0.001) === 0.001999999999995339), guaranteeing
+// the widened span still measures >= MIN_SPAN_DEG.
 const HALF_SPAN_DEG = (MIN_SPAN_DEG / 2) * 1.0001;
 
 /**
