@@ -40,6 +40,17 @@ describe('downsample', () => {
       expect(result[i]).toBeGreaterThan(result[i - 1]);
     }
   });
+
+  it('handles step just above 1 (501 points to 500) without duplicates', () => {
+    const points = Array.from({ length: 501 }, (_, i) => i);
+    const result = downsample(points, 500);
+    expect(result.length).toBe(500);
+    expect(result[0]).toBe(0);
+    expect(result[result.length - 1]).toBe(500);
+    for (let i = 1; i < result.length; i++) {
+      expect(result[i]).toBeGreaterThan(result[i - 1]);
+    }
+  });
 });
 
 describe('toLineString', () => {

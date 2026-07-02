@@ -29,7 +29,8 @@ export function hasRenderableRoute(points: LatLon[]): boolean {
 /**
  * Evenly stride-downsample to at most maxPoints, always keeping the first
  * and last points. Uses index interpolation, so output stays in order and
- * duplicate-free as long as maxPoints <= points.length.
+ * duplicate-free as long as maxPoints < points.length (equality returns the
+ * input unchanged). Note: maxPoints < 2 also returns the input unchanged.
  */
 export function downsample<T>(points: T[], maxPoints: number): T[] {
   if (maxPoints < 2 || points.length <= maxPoints) return points;
@@ -38,7 +39,10 @@ export function downsample<T>(points: T[], maxPoints: number): T[] {
   let prevIdx = -1;
   for (let i = 0; i < maxPoints; i++) {
     let idx = Math.round(i * step);
-    if (idx <= prevIdx) idx = prevIdx + 1; // guard against rounding collisions
+    // Collision guard: unreachable for step > 1 (which the early return
+    // guarantees mathematically) — kept purely as defense against float
+    // edge cases in i * step. Do not simplify away.
+    if (idx <= prevIdx) idx = prevIdx + 1;
     result.push(points[idx]);
     prevIdx = idx;
   }
@@ -79,6 +83,10 @@ const HALF_SPAN_DEG = (MIN_SPAN_DEG / 2) * 1.0001;
 /**
  * Bounding box of a route as [west, south, east, north] — GeoJSON bbox order,
  * which is also MapLibre v11's LngLatBounds shape.
+ *
+ * Callers must gate with hasRenderableRoute — an empty input yields a NaN
+ * bbox. Antimeridian-crossing routes are not handled (fine for a road-trip
+ * dashboard; revisit if trips ever span ±180° longitude).
  */
 export function routeBounds(points: LatLon[]): [number, number, number, number] {
   let minLat = Infinity;
