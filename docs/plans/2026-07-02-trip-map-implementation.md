@@ -652,7 +652,7 @@ Install the resulting build on the iPhone.
 3. Scroll the trips list with a finger starting on the preview — list must scroll (preview gestures disabled).
 4. Tap preview → fullscreen modal: pinch/zoom/pan work; chip shows name + distance; CLOSE returns.
 5. Expand a trip, collapse, expand another — no crash, correct route per trip.
-6. Airplane mode → expand a trip: route line still renders (blank/cached basemap is acceptable); app never blocks.
+6. Airplane mode → expand a trip: route line still renders (blank/cached basemap is acceptable); app never blocks. Caveat: this holds when the style JSON is in MapLibre's ambient cache (i.e. a map was viewed at least once before going offline). A fresh install that goes offline before ever showing a map may render a blank preview — expected behavior, not a bug.
 7. Real trip with GPS off (0–1 breadcrumbs) → no map section, no error.
 8. Switch demo mode back off → verify real trips list intact.
 

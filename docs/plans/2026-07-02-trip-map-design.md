@@ -34,7 +34,7 @@ Rejected alternatives:
 
 ### Data flow
 
-Expanded trip card already calls `getTripBreadcrumbs(tripId)` for TripChart — the same result feeds TripMap. No new queries, no schema changes.
+`TripMapSection` self-fetches via the existing `getTripBreadcrumbs(tripId)`, mirroring TripChart's self-contained fetch pattern (TripChart uses its own `getTripChartData` query). No new service functions or schema changes; one extra local SQLite query per card expansion is negligible.
 
 ### Placement
 
