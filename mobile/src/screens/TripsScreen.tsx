@@ -15,6 +15,7 @@ import type { TripRow } from '../models/types';
 import { getRecentTrips, deleteTrip, getTripBreadcrumbs, renameTripEntry } from '../services/loggingService';
 import { exportAndShare } from '../services/gpxExport';
 import { TripChart } from '../components/TripChart';
+import { TripMapSection } from '../components/TripMap';
 
 interface TripsScreenProps {
   onBack: () => void;
@@ -114,7 +115,16 @@ function TripItem({
         )}
       </Pressable>
 
-      {expanded && <TripChart tripId={trip.id} />}
+      {expanded && (
+        <>
+          <TripMapSection
+            tripId={trip.id}
+            tripName={trip.name}
+            distanceMi={trip.distanceMi}
+          />
+          <TripChart tripId={trip.id} />
+        </>
+      )}
 
       <View style={styles.tripActions}>
         <Pressable style={styles.exportBtn} onPress={() => onExport(trip)}>
