@@ -226,6 +226,11 @@ export function TripsScreen({ onBack }: TripsScreenProps) {
       <FlatList
         data={trips}
         keyExtractor={(item) => item.id.toString()}
+        // RN defaults this to true on Android, detaching offscreen subviews —
+        // a known cause of blank/frozen native map surfaces when an expanded
+        // card with a MapLibre view is scrolled away and back. The clipping
+        // optimization buys nothing for a 50-row list.
+        removeClippedSubviews={false}
         renderItem={({ item }) => (
           <TripItem
             trip={item}
