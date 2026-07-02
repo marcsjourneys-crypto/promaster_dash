@@ -2,11 +2,13 @@
  * Trip route map — preview (non-interactive, in the expanded trip card)
  * plus a fullscreen interactive modal.
  *
- * The route polyline renders locally even when tiles can't load (offline),
- * so there is no hard network dependency. Basemap source: see mapConfig.ts.
+ * The route polyline is drawn from local breadcrumb data, so once the style
+ * JSON is available (freshly loaded or in MapLibre's ambient cache) it renders
+ * even when tile fetches fail. A cold offline start with a never-cached style
+ * may show nothing until connectivity returns. Basemap source: see mapConfig.ts.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Modal, Pressable, StyleSheet, SafeAreaView } from 'react-native';
 import {
   Map as MapLibreMap, // aliased: 'Map' would shadow the JS global
@@ -30,9 +32,26 @@ const PREVIEW_HEIGHT = 200;
 const PREVIEW_MAX_POINTS = 500;
 const CAMERA_PADDING = 40;
 
-/** Shared presentational map: basemap + route line + start/end markers. */
+/**
+ * Shared presentational map: basemap + route line + start/end markers.
+ *
+ * Precondition: `points` must contain >= 2 points — this indexes points[0] /
+ * points[length - 1] and calls routeBounds (NaN bbox on empty input). Callers
+ * must gate with hasRenderableRoute first.
+ */
 function RouteMap({ points, interactive }: { points: LatLon[]; interactive: boolean }) {
-  const bounds = routeBounds(points); // [west, south, east, north]
+  // Memoized: GeoJSONSource JSON.stringifys its `data` prop on every render,
+  // and fresh feature objects would defeat its memo — expensive inside the
+  // TripsScreen FlatList.
+  const { bounds, line, start, end } = useMemo(
+    () => ({
+      bounds: routeBounds(points), // [west, south, east, north]
+      line: toLineString(points),
+      start: toPoint(points[0]),
+      end: toPoint(points[points.length - 1]),
+    }),
+    [points],
+  );
   return (
     <MapLibreMap
       style={StyleSheet.absoluteFill}
@@ -55,7 +74,7 @@ function RouteMap({ points, interactive }: { points: LatLon[]; interactive: bool
           },
         }}
       />
-      <GeoJSONSource id="route" data={toLineString(points)}>
+      <GeoJSONSource id="route" data={line}>
         <Layer
           type="line"
           id="routeLine"
@@ -63,7 +82,7 @@ function RouteMap({ points, interactive }: { points: LatLon[]; interactive: bool
           layout={{ 'line-cap': 'round', 'line-join': 'round' }}
         />
       </GeoJSONSource>
-      <GeoJSONSource id="routeStart" data={toPoint(points[0])}>
+      <GeoJSONSource id="routeStart" data={start}>
         <Layer
           type="circle"
           id="routeStartCircle"
@@ -75,7 +94,7 @@ function RouteMap({ points, interactive }: { points: LatLon[]; interactive: bool
           }}
         />
       </GeoJSONSource>
-      <GeoJSONSource id="routeEnd" data={toPoint(points[points.length - 1])}>
+      <GeoJSONSource id="routeEnd" data={end}>
         <Layer
           type="circle"
           id="routeEndCircle"
@@ -112,9 +131,15 @@ export function TripMapSection({ tripId, tripName, distanceMi }: TripMapSectionP
     );
   }, [tripId]);
 
-  if (crumbs === null || !hasRenderableRoute(crumbs)) return null;
+  // Memoized so RouteMap's geometry memo (keyed on `points`) holds across
+  // re-renders. Computed before the early return to satisfy the Rules of
+  // Hooks; downsample is safe on empty/null-gated input handled below.
+  const previewPoints = useMemo(
+    () => (crumbs === null ? [] : downsample(crumbs, PREVIEW_MAX_POINTS)),
+    [crumbs],
+  );
 
-  const previewPoints = downsample(crumbs, PREVIEW_MAX_POINTS);
+  if (crumbs === null || !hasRenderableRoute(crumbs)) return null;
 
   return (
     <>
@@ -142,7 +167,12 @@ export function TripMapSection({ tripId, tripName, distanceMi }: TripMapSectionP
                   {tripName || 'TRIP'} · {distanceMi.toFixed(1)} mi
                 </Text>
               </View>
-              <Pressable style={styles.closeBtn} onPress={() => setFullscreen(false)}>
+              {/* hitSlop pads the ~33pt visual button to the 44pt HIG minimum */}
+              <Pressable
+                style={styles.closeBtn}
+                hitSlop={10}
+                onPress={() => setFullscreen(false)}
+              >
                 <Text style={styles.closeBtnText}>✕ CLOSE</Text>
               </Pressable>
             </View>
