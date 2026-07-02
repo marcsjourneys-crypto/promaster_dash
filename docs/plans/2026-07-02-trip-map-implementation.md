@@ -182,16 +182,15 @@ describe('toPoint', () => {
 });
 
 describe('routeBounds', () => {
-  it('returns sw/ne corners in [lon, lat] order', () => {
+  it('returns a [west, south, east, north] bbox', () => {
     const b = routeBounds([pt(47.6, -122.3), pt(47.8, -122.1), pt(47.7, -122.5)]);
-    expect(b.sw).toEqual([-122.5, 47.6]);
-    expect(b.ne).toEqual([-122.1, 47.8]);
+    expect(b).toEqual([-122.5, 47.6, -122.1, 47.8]);
   });
 
   it('enforces a minimum span for near-stationary routes', () => {
     const b = routeBounds([pt(47.6, -122.3), pt(47.6, -122.3)]);
-    expect(b.ne[0] - b.sw[0]).toBeGreaterThanOrEqual(0.002);
-    expect(b.ne[1] - b.sw[1]).toBeGreaterThanOrEqual(0.002);
+    expect(b[2] - b[0]).toBeGreaterThanOrEqual(0.002);
+    expect(b[3] - b[1]).toBeGreaterThanOrEqual(0.002);
   });
 });
 ```
@@ -278,11 +277,11 @@ export function toPoint(p: LatLon): PointFeature {
 // make the camera zoom into a zero-area box.
 const MIN_SPAN_DEG = 0.002;
 
-/** Bounding box of a route as sw/ne corners in [lon, lat] order. */
-export function routeBounds(points: LatLon[]): {
-  sw: [number, number];
-  ne: [number, number];
-} {
+/**
+ * Bounding box of a route as [west, south, east, north] — GeoJSON bbox order,
+ * which is also MapLibre v11's LngLatBounds shape.
+ */
+export function routeBounds(points: LatLon[]): [number, number, number, number] {
   let minLat = Infinity;
   let maxLat = -Infinity;
   let minLon = Infinity;
@@ -305,7 +304,7 @@ export function routeBounds(points: LatLon[]): {
     maxLon = mid + MIN_SPAN_DEG / 2;
   }
 
-  return { sw: [minLon, minLat], ne: [maxLon, maxLat] };
+  return [minLon, minLat, maxLon, maxLat];
 }
 ```
 
@@ -334,7 +333,9 @@ No Jest test — this renders a native map view. All logic it consumes was teste
 
 **Step 1: Create the component**
 
-Adjust MapLibre import/prop names if Task 1 Step 2 found a different API shape.
+The code below is written against the **verified v11.3.6 API** (Task 1 findings): exports are `Map`, `Camera`, `GeoJSONSource`, and a unified `Layer` with a `type` discriminant and kebab-case style-spec `paint`/`layout` props. Gestures are `dragPan`/`touchZoom`/`doubleTapZoom`/`touchRotate`/`touchPitch`; attribution is `attribution`. `Camera` takes `initialViewState={{ bounds: [w, s, e, n], padding: { top, right, bottom, left } }}`. If typecheck disagrees, trust the shipped `.d.ts` files in `node_modules/@maplibre/maplibre-react-native/lib/typescript/`.
+
+Note: in the MapLibre style spec, `line-cap`/`line-join` are **layout** properties while `line-color`/`line-width` are **paint** — they go in separate props.
 
 ```tsx
 /**
@@ -348,11 +349,10 @@ Adjust MapLibre import/prop names if Task 1 Step 2 found a different API shape.
 import React, { useEffect, useState } from 'react';
 import { View, Text, Modal, Pressable, StyleSheet, SafeAreaView } from 'react-native';
 import {
-  MapView,
+  Map as MapLibreMap, // aliased: 'Map' would shadow the JS global
   Camera,
-  ShapeSource,
-  LineLayer,
-  CircleLayer,
+  GeoJSONSource,
+  Layer,
 } from '@maplibre/maplibre-react-native';
 import { MAP_STYLE_URL } from '../config/mapConfig';
 import { getTripBreadcrumbs } from '../services/loggingService';
@@ -372,63 +372,62 @@ const CAMERA_PADDING = 40;
 
 /** Shared presentational map: basemap + route line + start/end markers. */
 function RouteMap({ points, interactive }: { points: LatLon[]; interactive: boolean }) {
-  const bounds = routeBounds(points);
+  const bounds = routeBounds(points); // [west, south, east, north]
   return (
-    <MapView
+    <MapLibreMap
       style={StyleSheet.absoluteFill}
       mapStyle={MAP_STYLE_URL}
-      zoomEnabled={interactive}
-      scrollEnabled={interactive}
-      rotateEnabled={interactive}
-      pitchEnabled={false}
-      attributionEnabled={true}
+      dragPan={interactive}
+      touchZoom={interactive}
+      doubleTapZoom={interactive}
+      touchRotate={interactive}
+      touchPitch={false}
+      attribution={true}
     >
       <Camera
-        defaultSettings={{
-          bounds: {
-            ne: bounds.ne,
-            sw: bounds.sw,
-            paddingTop: CAMERA_PADDING,
-            paddingBottom: CAMERA_PADDING,
-            paddingLeft: CAMERA_PADDING,
-            paddingRight: CAMERA_PADDING,
+        initialViewState={{
+          bounds,
+          padding: {
+            top: CAMERA_PADDING,
+            right: CAMERA_PADDING,
+            bottom: CAMERA_PADDING,
+            left: CAMERA_PADDING,
           },
         }}
       />
-      <ShapeSource id="route" shape={toLineString(points)}>
-        <LineLayer
+      <GeoJSONSource id="route" data={toLineString(points)}>
+        <Layer
+          type="line"
           id="routeLine"
-          style={{
-            lineColor: colors.amber,
-            lineWidth: 3,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }}
+          paint={{ 'line-color': colors.amber, 'line-width': 3 }}
+          layout={{ 'line-cap': 'round', 'line-join': 'round' }}
         />
-      </ShapeSource>
-      <ShapeSource id="routeStart" shape={toPoint(points[0])}>
-        <CircleLayer
+      </GeoJSONSource>
+      <GeoJSONSource id="routeStart" data={toPoint(points[0])}>
+        <Layer
+          type="circle"
           id="routeStartCircle"
-          style={{
-            circleColor: colors.gpsOk,
-            circleRadius: 6,
-            circleStrokeWidth: 2,
-            circleStrokeColor: '#ffffff',
+          paint={{
+            'circle-color': colors.gpsOk,
+            'circle-radius': 6,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
           }}
         />
-      </ShapeSource>
-      <ShapeSource id="routeEnd" shape={toPoint(points[points.length - 1])}>
-        <CircleLayer
+      </GeoJSONSource>
+      <GeoJSONSource id="routeEnd" data={toPoint(points[points.length - 1])}>
+        <Layer
+          type="circle"
           id="routeEndCircle"
-          style={{
-            circleColor: colors.segCrit,
-            circleRadius: 6,
-            circleStrokeWidth: 2,
-            circleStrokeColor: '#ffffff',
+          paint={{
+            'circle-color': colors.segCrit,
+            'circle-radius': 6,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
           }}
         />
-      </ShapeSource>
-    </MapView>
+      </GeoJSONSource>
+    </MapLibreMap>
   );
 }
 
