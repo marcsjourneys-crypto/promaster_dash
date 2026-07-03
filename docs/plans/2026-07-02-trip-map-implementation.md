@@ -638,12 +638,17 @@ git commit -m "feat: show route map in expanded trip card"
 
 ### Task 6: Dev-client rebuild and on-device verification
 
-MapLibre is a native module: the map will NOT appear in the existing dev client. A rebuild is required (same flow as when BLE was added). This task needs Marc (EAS account, physical iPhone).
+MapLibre is a native module: the map will NOT appear in the existing dev client. A rebuild is required (same flow as when BLE was added). This task needs Marc (MacBook, physical iPhone).
 
-**Step 1: Rebuild the iOS dev client**
+**Step 1: Rebuild the iOS dev client locally on the Mac** (see `mobile/docs/local-builds.md`)
 
-Run: `eas build --profile development --platform ios`
-Install the resulting build on the iPhone.
+```sh
+git fetch && git checkout feature/trip-map
+cd mobile && npm install
+npx expo prebuild --clean --platform ios
+npx expo run:ios --device
+```
+This installs the Debug dev client (with MapLibre) directly to the connected iPhone; then run Metro on Windows (`npm start`) for the JS.
 
 **Step 2: On-device checklist**
 
