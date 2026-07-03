@@ -6,7 +6,11 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "prebuild:ios": "expo prebuild --platform ios",
+    "prebuild:clean": "expo prebuild --clean --platform ios",
+    "ios:device": "expo run:ios --device",
+    "ios:release": "expo run:ios --device --configuration Release"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
