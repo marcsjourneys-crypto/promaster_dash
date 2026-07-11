@@ -54,7 +54,7 @@ TripMap preview sits above TripChart inside the expanded card. Preview is non-in
 ## Build Impact
 
 - `npx expo install @maplibre/maplibre-react-native`; add its plugin to `app.json`.
-- Rebuild dev client via EAS (same flow as the BLE module).
+- Rebuild dev client locally on the Mac (see `mobile/docs/local-builds.md`).
 - No new permissions or Info.plist entries.
 
 ## Future (explicitly out of scope for v1)
