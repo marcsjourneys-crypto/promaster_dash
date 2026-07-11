@@ -204,6 +204,15 @@ export function transTempToF(bytes: number[], twoByteMode = false): number {
   return ((bytes[0] - 40) * 9) / 5 + 32;
 }
 
+/**
+ * Mode 22 single-byte signed °C → °F (948TE candidate DID 1C44).
+ * A is a two's-complement signed byte in °C.
+ */
+export function signedCelsiusToF(bytes: number[]): number {
+  const c = bytes[0] > 127 ? bytes[0] - 256 : bytes[0];
+  return c * 1.8 + 32;
+}
+
 /** Mode 01 PID 04: Engine load. A * 100 / 255 (%) */
 export function bytesToLoadPct(bytes: number[]): number {
   return (bytes[0] * 100) / 255;

@@ -31,6 +31,7 @@ import { useVehicleStore } from '../store/vehicleStore';
 import type { OBDData } from '../store/vehicleStore';
 import { PID_REGISTRY, type PidDef } from '../config/pidRegistry';
 import { CANDIDATES, type TransTempCandidate } from './transTempCandidates';
+import type { TransTempProvider } from './transTempProvider';
 
 const TRANS_CANDIDATE_KEY = '@promaster/transCandidate';
 
@@ -88,6 +89,10 @@ let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 // Working trans temp candidate (set after discovery)
 let transCandidate: TransTempCandidate | null = null;
 
+// Active transmission path provider (set by transPathResolver after connect).
+// Type-only import above — providers runtime-import obdService, never the reverse.
+let transProvider: TransTempProvider | null = null;
+
 // Mode 01 PIDs reported as supported by this vehicle's ECM (populated at init).
 // Empty set means discovery hasn't run yet — don't skip polls in that case.
 let supportedMode01Pids: Set<string> = new Set();
@@ -115,6 +120,16 @@ export function setTransCandidate(candidate: TransTempCandidate | null): void {
 /** Get the current trans candidate. */
 export function getTransCandidate(): TransTempCandidate | null {
   return transCandidate;
+}
+
+/** Set the active transmission path provider (null = trans temp unavailable). */
+export function setTransProvider(p: TransTempProvider | null): void {
+  transProvider = p;
+}
+
+/** Get the active transmission path provider. */
+export function getTransProvider(): TransTempProvider | null {
+  return transProvider;
 }
 
 /** Get the CAN protocol number locked during adapter init (e.g., '6' for 11-bit 500k). */
@@ -187,6 +202,11 @@ function is11BitProtocol(): boolean {
  */
 function broadcastHeader(): string {
   return is11BitProtocol() ? '7DF' : '18DB33F1';
+}
+
+/** Public accessor for the protocol's functional broadcast header (948TE teardown). */
+export function getBroadcastHeader(): string {
+  return broadcastHeader();
 }
 
 /** Set the enabled PID list (call before startPolling). */
@@ -319,8 +339,8 @@ function buildSchedule(): { id: string; intervalMs: number }[] {
   const sorted = [...PID_REGISTRY].sort((a, b) => a.displayOrder - b.displayOrder);
   for (const pid of sorted) {
     if (isPidEnabled(pid.id)) {
-      // Trans temp needs a discovered candidate
-      if (pid.id === 'transF' && !transCandidate) continue;
+      // Trans temp needs a resolved path provider
+      if (pid.id === 'transF' && !transProvider) continue;
       schedule.push({ id: pid.id, intervalMs: pid.intervalMs });
     }
   }
@@ -464,7 +484,7 @@ async function executePoll(id: string): Promise<void> {
     case 'rpm':          return pollRPM();
     case 'speed':        return pollSpeed();
     case 'dtc':          return pollDTCs();
-    case 'transF':       return pollTransTemp();
+    case 'transF':       { await transProvider?.read(); return; }
     case 'coolantF':     return pollCoolant();
     case 'voltageV':     return pollVoltage();
     case 'oilPressurePsi': return pollMode22Pid('oilPressurePsi');
@@ -583,14 +603,14 @@ async function pollVoltage(): Promise<void> {
 
 let transNullLogCount = 0;
 
-async function pollTransTemp(): Promise<void> {
+export async function pollTransTemp(): Promise<number | null> {
   if (!transCandidate) {
     transNullLogCount++;
     // Log every 10th skip to avoid flooding
     if (transNullLogCount <= 3 || transNullLogCount % 10 === 0) {
       dlog(`OBD: Trans SKIPPED — no candidate set (skip #${transNullLogCount}). Run SCAN TRANS TEMP on BLE screen.`);
     }
-    return;
+    return null;
   }
   transNullLogCount = 0;
 
@@ -606,7 +626,7 @@ async function pollTransTemp(): Promise<void> {
     const sibling = CANDIDATES.find(c => c.did === savedDid && c.is29bit === protocolIs29);
     if (!sibling) {
       dlog(`OBD: Trans SKIPPED — no ${protocolIs29 ? '29' : '11'}-bit candidate for DID ${savedDid} (re-run SCAN TRANS TEMP)`);
-      return;
+      return null;
     }
     dlog(`OBD: Trans — saved candidate wrong CAN width for ATSP${lockedProtocol}; auto-switching to "${sibling.name}" (header ${sibling.header})`);
     transCandidate = sibling;
@@ -616,7 +636,7 @@ async function pollTransTemp(): Promise<void> {
   const atshOkTrans = await sendAtsh(transCandidate.header);
   if (!atshOkTrans) {
     dlog(`OBD: Trans SKIPPED — adapter rejected ATSH${transCandidate.header} (re-run SCAN TRANS TEMP)`);
-    return;
+    return null;
   }
   await sleep(100); // Let adapter reconfigure CAN filter
 
@@ -624,6 +644,7 @@ async function pollTransTemp(): Promise<void> {
   dlog(`OBD: Trans raw: "${resp}"`);
   const bytes = parseMode22(resp, transCandidate.did);
 
+  let result: number | null = null;
   if (bytes && bytes.length >= 1) {
     const hexBytes = bytes.map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
     dlog(`OBD: Trans bytes=[${hexBytes}]`);
@@ -631,6 +652,7 @@ async function pollTransTemp(): Promise<void> {
     dlog(`OBD: Trans = ${tempF.toFixed(1)}\u00b0F`);
     if (tempF >= -40 && tempF <= 400) {
       useVehicleStore.getState().updateOBD({ transF: tempF });
+      result = tempF;
     }
   } else {
     dlog(`OBD: Trans parse FAILED for raw: "${resp}"`);
@@ -642,6 +664,7 @@ async function pollTransTemp(): Promise<void> {
   // following Mode 01 polls stop reaching the ECM.
   await sendCommand(`ATSH${broadcastHeader()}`, 1500);
   await sendCommand('ATAR', 1500);
+  return result;
 }
 
 // ---------------------------------------------------------------------------

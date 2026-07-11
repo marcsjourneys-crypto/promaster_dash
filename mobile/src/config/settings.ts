@@ -7,6 +7,7 @@ const STORAGE_KEY = 'promaster_dash_settings';
 
 export type TempUnit = 'F' | 'C';
 export type SpeedUnit = 'mph' | 'kph';
+export type TransMode = 'auto' | '62TE' | '948TE';
 
 export interface Settings {
   // Temperature thresholds (°F)
@@ -53,6 +54,9 @@ export interface Settings {
   // Maintenance
   severeDuty: boolean;
   maintenanceWizardComplete: boolean;
+
+  // Transmission path: auto-detect or force 62TE (6-spd) / 948TE (9-spd)
+  transMode: TransMode;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -79,6 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
   enabledPids: getDefaultEnabledPids(),
   severeDuty: false,
   maintenanceWizardComplete: false,
+  transMode: 'auto',
 };
 
 /** Load settings from AsyncStorage, returning defaults for missing keys. */

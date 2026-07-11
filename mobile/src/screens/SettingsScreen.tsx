@@ -18,7 +18,9 @@ import {
   saveSettings,
   DEFAULT_SETTINGS,
   type Settings,
+  type TransMode,
 } from '../config/settings';
+import { applyTransModeChange } from '../services/transPathResolver';
 import {
   getPidsByGroup,
   GROUP_LABELS,
@@ -48,7 +50,7 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
     loadSettings().then(setSettings);
   }, []);
 
-  const update = useCallback((key: keyof Settings, value: number | boolean | string[]) => {
+  const update = useCallback((key: keyof Settings, value: number | boolean | string | string[]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     setModified(true);
   }, []);
@@ -391,6 +393,32 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
                 thumbColor={settings.severeDuty ? colors.amber : 'rgba(150, 140, 120, 1)'}
               />
             </View>
+
+            <Text style={[styles.sectionHeader, { marginTop: 20 }]}>TRANSMISSION</Text>
+            <View style={styles.unitRow}>
+              <Text style={styles.switchLabel}>Transmission</Text>
+              <View style={styles.unitToggle}>
+                {([
+                  { mode: 'auto', label: 'AUTO' },
+                  { mode: '62TE', label: '6-SPD' },
+                  { mode: '948TE', label: '9-SPD' },
+                ] as { mode: TransMode; label: string }[]).map(({ mode, label }) => (
+                  <Pressable
+                    key={mode}
+                    style={[styles.unitBtn, settings.transMode === mode && styles.unitBtnActive]}
+                    onPress={() => {
+                      update('transMode', mode);
+                      applyTransModeChange(mode).catch(() => {});
+                    }}
+                  >
+                    <Text style={[styles.unitBtnText, settings.transMode === mode && styles.unitBtnTextActive]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            <Text style={styles.switchHint}>
+              Auto (recommended) detects the transmission. 6-speed = 62TE (2014-2021). 9-speed = 948TE (2022+).
+            </Text>
           </>
         )}
 

@@ -24,8 +24,12 @@ import {
   type ScannedDevice,
   type TransportType,
 } from '../services/obdTransport';
-import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, loadTransCandidate, clearTransCandidate, getLockedProtocol } from '../services/obdService';
+import { initializeAdapter, startPolling, stopPolling, setTransCandidate, getTransCandidate, saveTransCandidate, getLockedProtocol, setTransProvider } from '../services/obdService';
 import { scanCandidates, selectBestCandidate, type CandidateResult } from '../services/transTempCandidates';
+import { resolveTransPath, latchTransPath } from '../services/transPathResolver';
+import { provider62TE, getLast62ScanResult } from '../services/provider62TE';
+// TEMPORARY DIAGNOSTIC (948TE probe mode) — see trans948Probe.ts to remove
+import { TRANS_PROBE_MODE, run948ProbeSweep } from '../services/trans948Probe';
 
 import { dlog } from '../services/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,6 +48,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
   const [connected, setConnected] = useState(isConnected());
   const [connectedName, setConnectedName] = useState(getConnectedDeviceName());
   const [scanningTrans, setScanningTrans] = useState(false);
+  const [probing948, setProbing948] = useState(false); // TEMPORARY DIAGNOSTIC (948TE probe)
   const [transResults, setTransResults] = useState<CandidateResult[]>([]);
   const [adapterSupports29bit, setAdapterSupports29bit] = useState<boolean | null>(null);
   const [savedDevice, setSavedDevice] = useState<ScannedDevice | null>(null);
@@ -107,33 +112,11 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
         setConnectedName(device.name);
         setBleConnected(true);
 
-        // Load saved trans candidate or auto-scan for one
-        const saved = await loadTransCandidate();
-        if (saved && saved.twoByteMode === false) {
-          dlog('Trans: Clearing stale candidate (twoByteMode was false, needs re-scan)');
-          await clearTransCandidate();
-          setTransCandidate(null);
-        } else if (saved) {
-          setTransCandidate(saved);
-          dlog(`Trans: Using saved candidate "${saved.name}"`);
-        }
-        if (!saved || saved.twoByteMode === false) {
-          dlog('Trans: No saved candidate — scanning...');
-          try {
-            const { results, supports29bit } = await scanCandidates(getLockedProtocol());
-            setAdapterSupports29bit(supports29bit);
-            const best = selectBestCandidate(results);
-            if (best) {
-              setTransCandidate(best);
-              await saveTransCandidate(best);
-              dlog(`Trans: Auto-found "${best.name}" (DID ${best.did})`);
-            } else {
-              dlog('Trans: Auto-scan found no valid candidates');
-            }
-          } catch (e: any) {
-            dlog(`Trans: Auto-scan error: ${e.message}`);
-          }
-        }
+        // Resolve the transmission path (62TE / 948TE / unavailable). The
+        // 62TE candidate load/auto-scan that used to live here runs verbatim
+        // inside provider62TE.probe().
+        await resolveTransPath();
+        setAdapterSupports29bit(getLast62ScanResult()?.supports29bit ?? null);
 
         startPolling();
         dlog('Connect: SUCCESS — polling started');
@@ -157,6 +140,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
     setConnectedName(null);
     setBleConnected(false);
     setTransCandidate(null);
+    setTransProvider(null);
     setTransResults([]);
     setAdapterSupports29bit(null);
   }, [setBleConnected]);
@@ -173,6 +157,10 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
       if (best) {
         setTransCandidate(best);
         await saveTransCandidate(best);
+        // A successful manual scan proves the 62TE path — install and latch it
+        // so the poll schedule includes trans temp.
+        setTransProvider(provider62TE);
+        await latchTransPath('62TE');
         Alert.alert(
           'Trans Temp Found',
           `Working: ${best.name}\nHeader: ${best.header}\nDID: ${best.did}`,
@@ -185,6 +173,24 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
     } finally {
       startPolling();
       setScanningTrans(false);
+    }
+  }, []);
+
+  // TEMPORARY DIAGNOSTIC — 948TE probe sweep (see trans948Probe.ts to remove)
+  const handle948Probe = useCallback(async () => {
+    setProbing948(true);
+    stopPolling();
+    try {
+      await run948ProbeSweep();
+      Alert.alert(
+        'Probe Complete',
+        'Open Settings → Data → View Debug Log and SHARE the [948TE-PROBE] SUMMARY block.',
+      );
+    } catch (e: any) {
+      Alert.alert('Probe Error', e.message);
+    } finally {
+      startPolling();
+      setProbing948(false);
     }
   }, []);
 
@@ -253,6 +259,16 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
               <Text style={styles.actionBtnText}>SCAN TRANS TEMP</Text>
             )}
           </Pressable>
+          {/* TEMPORARY DIAGNOSTIC — 948TE probe button (see trans948Probe.ts to remove) */}
+          {TRANS_PROBE_MODE && (
+            <Pressable style={styles.actionBtn} onPress={handle948Probe} disabled={probing948 || scanningTrans || connecting}>
+              {probing948 ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.actionBtnText}>948TE PROBE</Text>
+              )}
+            </Pressable>
+          )}
           <Pressable style={[styles.actionBtn, styles.disconnectBtn]} onPress={handleDisconnect}>
             <Text style={styles.disconnectBtnText}>DISCONNECT</Text>
           </Pressable>
