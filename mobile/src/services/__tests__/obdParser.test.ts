@@ -21,7 +21,19 @@ describe('transTempToF two-byte ÷64 (62TE B010/9110 and 948TE div64 candidates)
   });
 });
 
-describe('signedCelsiusToF (948TE DID 1C44)', () => {
+describe('transTempToF single-byte offset-40 (948TE DID 08DF, ScanGauge KL/Renegade)', () => {
+  it('0x87 (135) = 95°C → 203°F', () => {
+    expect(transTempToF([0x87], false)).toBeCloseTo(203.0);
+  });
+  it('0x28 (40) = 0°C → 32°F', () => {
+    expect(transTempToF([0x28], false)).toBeCloseTo(32.0);
+  });
+  it('extra trailing bytes ignored: [0x87, 0x00] → 203°F', () => {
+    expect(transTempToF([0x87, 0x00], false)).toBeCloseTo(203.0);
+  });
+});
+
+describe('signedCelsiusToF (unused; kept for future candidates)', () => {
   it('0x50 = 80°C → 176°F', () => {
     expect(signedCelsiusToF([0x50])).toBeCloseTo(176.0);
   });

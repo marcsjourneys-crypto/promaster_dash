@@ -195,7 +195,8 @@ export function obdSpeedToMph(bytes: number[]): number {
 /**
  * Mode 22 trans temp.
  * B010/9110: (A*256+B)/64 → °F directly (confirmed via ScanGauge XGauge).
- * Fallback single-byte: (A - 40) * 1.8 + 32.
+ * Single-byte (twoByteMode=false): (A - 40) * 1.8 + 32 — i.e. °C = A − 40.
+ * This is also the 948TE DID 08DF decode ('offset40', ScanGauge KL/Renegade).
  */
 export function transTempToF(bytes: number[], twoByteMode = false): number {
   if (twoByteMode && bytes.length >= 2) {
@@ -205,8 +206,9 @@ export function transTempToF(bytes: number[], twoByteMode = false): number {
 }
 
 /**
- * Mode 22 single-byte signed °C → °F (948TE candidate DID 1C44).
- * A is a two's-complement signed byte in °C.
+ * Mode 22 single-byte signed °C → °F.
+ * A is a two's-complement signed byte in °C. (Kept for future candidates;
+ * no current provider uses it — 948TE 08DF turned out to be offset-40.)
  */
 export function signedCelsiusToF(bytes: number[]): number {
   const c = bytes[0] > 127 ? bytes[0] - 256 : bytes[0];

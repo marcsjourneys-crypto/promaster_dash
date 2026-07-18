@@ -12,9 +12,11 @@
  * gauge shows its existing '--' unavailable state. No loud errors.
  *
  * TODO(auto-order): on a 2022+ van the 62TE scan's "PCM 29-bit B010" entry
- * (18DA10F1 + 22B010, ÷64 two-byte — literally 948TE candidate #2) will very
- * likely answer, so auto latches '62TE' on a 9-speed van but reads correct
- * temps; only the label is wrong. Probe mode and the manual 9-speed setting
+ * (18DA10F1 + 22B010, ÷64 two-byte — literally 948TE fallback candidate #4)
+ * may answer, so auto latches '62TE' on a 9-speed van but reads correct
+ * temps; only the label is wrong. (Research 2026-07: 2022 owners report the
+ * legacy ECM paths do NOT answer on the 9-speed, so this may be moot — the
+ * probe sweep will tell.) Probe mode and the manual 9-speed setting
  * are the correction paths. Consider preferring 948TE first in auto order
  * once a promoted 948TE candidate exists and is validated. Second wrinkle: if
  * a 2022+ van negotiates 11-bit (protocol 6), the 62TE scan's width guard

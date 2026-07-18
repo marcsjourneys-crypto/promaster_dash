@@ -14,7 +14,9 @@ export interface LogEntry {
   msg: string;
 }
 
-const MAX_ENTRIES = 500;
+// 3000 keeps ~20+ min of polling history so a [948TE-PROBE] sweep block can't
+// scroll out of the ring before the user opens Settings → Data and shares it.
+const MAX_ENTRIES = 3000;
 const entries: LogEntry[] = [];
 const listeners = new Set<() => void>();
 

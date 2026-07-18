@@ -16,12 +16,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { TransTempProvider } from './transTempProvider';
 import { sendCommand } from './obdTransport';
-import { parseMode22, transTempToF, signedCelsiusToF } from './obdParser';
+import { parseMode22, transTempToF } from './obdParser';
 import { getLockedProtocol, getBroadcastHeader } from './obdService';
 import { useVehicleStore } from '../store/vehicleStore';
 import { dlog } from './debugLog';
 
-export type Decode948 = 'div64' | 'signedCelsius';
+export type Decode948 = 'div64' | 'offset40';
 
 export interface Candidate948 {
   name: string;
@@ -31,18 +31,40 @@ export interface Candidate948 {
   request: string; // '22' + DID
   did: string;     // for parseMode22 marker matching
   decode: Decode948;
-  minBytes: number; // 2 for div64, 1 for signedCelsius
+  minBytes: number; // 2 for div64, 1 for offset40
 }
 
 /**
  * 948TE candidates, in sweep order (highest probability first).
- * Sources: #1 ScanGauge's newer-ProMaster code; #2 confirmed alive on a recent
- * ProMaster via UltraGauge; #3 classic FCA TCM 11-bit; #4 newer Stellantis
- * pattern (single signed °C byte).
+ * Sources:
+ *  #1 TCM 0x18 DID 08DF, °F = A×1.8−40 — ScanGauge's official Cherokee KL /
+ *     Renegade XGauge (18F12208DF, same 948TE trans), matches a promasterforum
+ *     OBDLink user-defined PID for the 2022+ PM built with Linear Logic
+ *     support; ScanGauge 3 autoscan confirmed reading trans temp on 2022/2025
+ *     ProMasters, so this path is known to pass the Secure Gateway.
+ *  #2 same DID at the ECM (0x10) in case the 2022+ ECM mirrors it.
+ *  #3/#4 legacy 62TE ECM paths (confirmed 2017–2021 PMs only) as fallbacks.
+ *  #5 classic FCA 11-bit TCM — longshot, covers an 11-bit-negotiated van.
  */
 export const CANDIDATES_948: Candidate948[] = [
   {
-    name: '948TE #1: module 0x10 DID 9110 (29-bit)',
+    name: '948TE #1: TCM 0x18 DID 08DF (29-bit, ScanGauge KL/Renegade)',
+    setup: ['ATSP7', 'ATCP18', 'ATSHDA18F1', 'ATCRA18DAF118'],
+    request: '2208DF',
+    did: '08DF',
+    decode: 'offset40',
+    minBytes: 1,
+  },
+  {
+    name: '948TE #2: ECM 0x10 DID 08DF (29-bit, mirror fallback)',
+    setup: ['ATSP7', 'ATCP18', 'ATSHDA10F1', 'ATCRA18DAF110', 'ATFCSHDA10F1'],
+    request: '2208DF',
+    did: '08DF',
+    decode: 'offset40',
+    minBytes: 1,
+  },
+  {
+    name: '948TE #3: ECM 0x10 DID 9110 (29-bit, legacy 62TE path)',
     setup: ['ATSP7', 'ATCP18', 'ATSHDA10F1', 'ATCRA18DAF110', 'ATFCSHDA10F1'],
     request: '229110',
     did: '9110',
@@ -50,7 +72,7 @@ export const CANDIDATES_948: Candidate948[] = [
     minBytes: 2,
   },
   {
-    name: '948TE #2: module 0x10 DID B010 (29-bit, UltraGauge-confirmed)',
+    name: '948TE #4: ECM 0x10 DID B010 (29-bit, legacy 62TE path)',
     setup: ['ATSP7', 'ATCP18', 'ATSHDA10F1', 'ATCRA18DAF110', 'ATFCSHDA10F1'],
     request: '22B010',
     did: 'B010',
@@ -58,20 +80,12 @@ export const CANDIDATES_948: Candidate948[] = [
     minBytes: 2,
   },
   {
-    name: '948TE #3: TCM 7E1 DID B010 (11-bit classic FCA)',
+    name: '948TE #5: TCM 7E1 DID B010 (11-bit classic FCA, longshot)',
     setup: ['ATSP6', 'ATSH7E1', 'ATCRA7E9'],
     request: '22B010',
     did: 'B010',
     decode: 'div64',
     minBytes: 2,
-  },
-  {
-    name: '948TE #4: module 0x18 DID 1C44 (29-bit, signed °C)',
-    setup: ['ATSP7', 'ATCP18', 'ATSHDA18F1', 'ATCRA18DAF118'],
-    request: '221C44',
-    did: '1C44',
-    decode: 'signedCelsius',
-    minBytes: 1,
   },
 ];
 
@@ -81,9 +95,11 @@ export const CANDIDATES_948: Candidate948[] = [
  */
 export const PROMOTED_948_CANDIDATES: Candidate948[] = [];
 
-/** Decode a Mode 22 positive-response payload for a 948TE candidate. */
+/** Decode a Mode 22 positive-response payload for a 948TE candidate.
+ *  div64: (A·256+B)/64 = °F.  offset40: °C = A−40 → °F = A×1.8−40 (the
+ *  transTempToF single-byte fallback is exactly this formula). */
 export function decode948(bytes: number[], decode: Decode948): number {
-  return decode === 'div64' ? transTempToF(bytes, true) : signedCelsiusToF(bytes);
+  return transTempToF(bytes, decode === 'div64');
 }
 
 // ---------------------------------------------------------------------------
