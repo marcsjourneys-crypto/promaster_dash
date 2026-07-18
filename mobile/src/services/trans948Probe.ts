@@ -47,6 +47,13 @@ function allDecodes(bytes: number[]): string {
   return parts.join('  ');
 }
 
+/**
+ * Temp-DID candidates tried on every live endpoint. First four are the
+ * Cherokee/62TE-era set (all rejected everywhere on the 2022 van, kept for
+ * cross-checking); the rest are additional Stellantis/ZF-9HP suspects.
+ */
+const TEMP_DIDS = ['08DF', 'B010', '9110', '1C44', '0510', '04FE', '2802', 'A010', '1940'];
+
 /** UDS negative-response codes seen in the wild, for readable logs. */
 const NRC_NAMES: Record<string, string> = {
   '10': 'generalReject',
@@ -100,6 +107,28 @@ export async function run948ProbeSweep(): Promise<void> {
     plog('================ SWEEP START ================');
     const { coolantF, ambientAirF } = useVehicleStore.getState();
     plog(`Reference: coolant=${coolantF !== null ? coolantF.toFixed(1) : 'n/a'}°F  ambient=${ambientAirF !== null ? ambientAirF.toFixed(1) : 'n/a'}°F`);
+
+    // Passive broadcast sniff: the 2022+ cluster can DISPLAY trans temp, so
+    // the value crosses the CAN as a periodic broadcast frame. If the OBD
+    // port sees any broadcast traffic, the signal is in there without UDS at
+    // all; if the port is silent, the SGW isolates broadcast — door closed.
+    plog('---- Passive CAN sniff (ATMA, ~4s) ----');
+    try {
+      await sendCommand('ATH1', 2000);
+      const dump = await sendCommand('ATMA', 4500); // timeout returns partial buffer
+      await sendCommand('AT', 1500); // any char halts monitor mode
+      const flat = dump.replace(/\s+/g, ' ').trim();
+      if (!flat || isNoData(flat)) {
+        plog('SNIFF: no broadcast traffic visible at OBD port (SGW isolates the bus)');
+      } else {
+        const out = flat.length > 1500 ? `${flat.slice(0, 1500)} …(+${flat.length - 1500} more chars)` : flat;
+        plog(`SNIFF RAW: ${out}`);
+      }
+      await sendCommand('ATH0', 2000);
+    } catch (e: any) {
+      plog(`SNIFF ERROR: ${e.message}`);
+      try { await sendCommand('ATH0', 2000); } catch {}
+    }
 
     // TCM liveness pre-probe: DIDs confirmed alive on the 948TE TCM (module
     // 0x18) via ScanGauge's KL/Renegade XGauge list — present gear (2852) and
@@ -162,48 +191,11 @@ export async function run948ProbeSweep(): Promise<void> {
       plog(`SESSION ERROR: ${e.message}`);
     }
 
-    // UDS endpoint enumeration: the 2022-van logs proved (a) live modules
-    // answer 3E00 (0x18 → 7E00), (b) this platform ignores functionally-
-    // addressed svc-22 reads, and (c) module 0x18 lacks the Cherokee trans
-    // DIDs even in extended session. So the TCM must live at a different
-    // physical address — walk all 256, then interrogate whoever answers.
-    plog('---- UDS endpoint scan (18DAxxF1 + 3E00, all 256 addrs) ----');
-    const liveAddrs: string[] = [];
-    try {
-      await sendCommand('ATSP7', 2000);
-      await sendCommand('ATCP18', 2000);
-      // Headers ON: raw responses carry the sender's address (18DAF1xx), so a
-      // slow module's late reply can't be mis-attributed to the next address.
-      await sendCommand('ATH1', 2000);
-      // Short ELM response timeout so dead addresses fail fast (~100 ms).
-      await sendCommand('ATST19', 2000);
-      // Wide receive filter: accept anything addressed to the tester
-      // (18DAF1xx) so we don't need per-address ATCRA. Fall back if the
-      // clone lacks ATCF/ATCM.
-      const cfOk = !(await sendCommand('ATCF18DAF100', 2000)).includes('?');
-      const wideFilter = cfOk && !(await sendCommand('ATCM1FFFFF00', 2000)).includes('?');
-      if (!wideFilter) plog('NOTE: ATCF/ATCM unsupported — using per-address ATCRA (slower)');
-      for (let a = 0; a <= 0xff; a++) {
-        if (a === 0xf1) continue; // the tester's own address
-        const hx = a.toString(16).padStart(2, '0').toUpperCase();
-        await sendCommand(`ATSHDA${hx}F1`, 800);
-        if (!wideFilter) await sendCommand(`ATCRA18DAF1${hx}`, 800);
-        const r = (await sendCommand('3E00', 1200)).trim();
-        if (r && !isNoData(r) && !r.includes('?') && !r.toUpperCase().includes('ERROR')) {
-          liveAddrs.push(hx);
-          plog(`ENDPOINT 0x${hx} ALIVE  ← "${escapeRaw(r)}"`);
-        }
-        if ((a & 0x3f) === 0x3f) plog(`...scanned through 0x${hx}`);
-      }
-      plog(`ENDPOINTS ALIVE: [${liveAddrs.join(', ') || 'none'}]`);
-    } catch (e: any) {
-      plog(`ENDPOINT SCAN ERROR: ${e.message}`);
-    } finally {
-      try {
-        await sendCommand('ATST7D', 2000); // restore ELM response timeout
-        await sendCommand('ATH0', 2000);   // headers back off for later stages
-      } catch {}
-    }
+    // Endpoint census (sweep v3, 2026-07-18) mapped the SGW's proxied
+    // allow-list on this van: exactly these 8 physical addresses answered
+    // 3E00 out of all 256. Reuse the map — re-walking costs ~90 s per run.
+    const liveAddrs = ['10', '18', '1F', '40', '60', 'C6', 'C7', 'CB'];
+    plog(`Using endpoint map from prior census: [${liveAddrs.join(', ')}]`);
 
     // Interrogate every live endpoint for the temp DIDs. Lines where either
     // decode lands in the plausible trans-temp band get a "<<< CHECK THIS"
@@ -222,7 +214,7 @@ export async function run948ProbeSweep(): Promise<void> {
         await sleep(100);
         lastTP = 0;
         await tp();
-        for (const did of ['08DF', 'B010', '9110', '1C44']) {
+        for (const did of TEMP_DIDS) {
           const raw = await sendCommand(`22${did}`, 2500);
           const bytes = parseMode22(raw, did);
           const decoded = bytes ? `bytes=[${hexBytes(bytes)}]  ${allDecodes(bytes)}` : 'no decode';
@@ -233,6 +225,104 @@ export async function run948ProbeSweep(): Promise<void> {
       if (liveAddrs.length > 24) plog(`NOTE: ${liveAddrs.length - 24} additional endpoints not probed (cap 24)`);
     } catch (e: any) {
       plog(`ENDPOINT PROBE ERROR: ${e.message}`);
+    }
+
+    // Mode-22 DID sweep on the ECM (0x10): research confirms Fiat-platform
+    // vans expose trans oil temp from the ENGINE module via 18DA10F1 (per
+    // ScanGauge's engineer), but the exact 948TE DID is proprietary/NDA'd.
+    // The ECM rejects unknown DIDs fast (NRC ~200 ms), so brute-force the
+    // likely pages. Page order: 91xx first (6-spd temp=9110, slip=91C0 both
+    // live there on 0x10), then B0/A0/08 (B010 6-spd, A002 Cherokee, 08DF
+    // placeholder), then low data pages. ~15-20 min total; parked-van OK.
+    plog('---- Mode-22 DID sweep on ECM 0x10 (18DA10F1) ----');
+    const didHits: string[] = [];
+    try {
+      for (const at of ['ATSP7', 'ATCP18', 'ATSHDA10F1', 'ATCRA18DAF110']) {
+        await sendCommand(at, 2000);
+      }
+      await sendCommand('ATST19', 2000); // fast fail on dead DIDs
+      await sleep(100);
+      const PAGES = ['91', 'B0', 'A0', '08', '02', '03', '04', '05', '06', '07', '00', '01', '09', '0A', '0B', '0C'];
+      for (const pg of PAGES) {
+        for (let lo = 0; lo <= 0xff; lo++) {
+          const did = pg + lo.toString(16).padStart(2, '0').toUpperCase();
+          const raw = (await sendCommand(`22${did}`, 1200)).trim();
+          const bytes = parseMode22(raw, did);
+          if (bytes) {
+            didHits.push(did);
+            const mark = plausibleAny(bytes) ? '  <<< CHECK THIS' : '';
+            plog(`DID ${did} POSITIVE  ← RAW "${escapeRaw(raw)}"  bytes=[${hexBytes(bytes)}]  ${allDecodes(bytes)}${mark}`);
+          }
+        }
+        plog(`...page ${pg}xx done (${didHits.length} positives so far)`);
+      }
+      plog(`DID SWEEP POSITIVES on 0x10: [${didHits.join(', ') || 'none'}]`);
+    } catch (e: any) {
+      plog(`DID SWEEP ERROR: ${e.message}`);
+    } finally {
+      try {
+        await sendCommand('ATST7D', 2000);
+      } catch {}
+    }
+
+    // Quick mode-21 probes on the ECM (US-platform recipe used 21 30 on the
+    // TCM; one shot each on the engine module costs nothing). Raw-logged only
+    // — responses are 61 xx ..., not 62, so no parseMode22.
+    plog('---- Mode-21 probes on ECM 0x10 ----');
+    try {
+      for (const req of ['2100', '2110', '2130', '2140']) {
+        const raw = await sendCommand(req, 2500);
+        plog(`M21 → ${req}  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}`);
+      }
+    } catch (e: any) {
+      plog(`MODE-21 ERROR: ${e.message}`);
+    }
+
+    // 11-bit Fiat-style diagnostic scan: the Ducato platform historically
+    // parks module diagnostics on 11-bit IDs in the 0x700 range, invisible to
+    // the 29-bit census above. Walk 0x700–0x7FF (skipping the 7DF functional
+    // broadcast), then hit any live endpoint with the temp DIDs.
+    plog('---- 11-bit diagnostic scan (ATSP6, 0x700–0x7FF) ----');
+    const live11: string[] = [];
+    try {
+      await sendCommand('ATSP6', 3000);
+      await sendCommand('ATH1', 2000);
+      await sendCommand('ATCRA', 1500); // clear receive filter — see every reply
+      await sendCommand('ATST19', 2000);
+      for (let id = 0x700; id <= 0x7ff; id++) {
+        if (id === 0x7df) continue; // functional broadcast, not a module
+        const hx = id.toString(16).toUpperCase().padStart(3, '0');
+        await sendCommand(`ATSH${hx}`, 800);
+        const r = (await sendCommand('3E00', 1000)).trim();
+        const up = r.toUpperCase();
+        if (r && !isNoData(r) && !r.includes('?') && !up.includes('ERROR') && !up.includes('STOPPED') && !up.includes('SEARCHING')) {
+          live11.push(hx);
+          plog(`11BIT 0x${hx} ALIVE  ← "${escapeRaw(r)}"`);
+        }
+        if ((id & 0x3f) === 0x3f) plog(`...scanned through 0x${hx}`);
+      }
+      plog(`11-BIT ENDPOINTS: [${live11.join(', ') || 'none'}]`);
+      for (const hx of live11.slice(0, 12)) {
+        plog(`-- 11-bit endpoint 0x${hx} --`);
+        await sendCommand(`ATSH${hx}`, 1500);
+        for (const did of TEMP_DIDS) {
+          const raw = await sendCommand(`22${did}`, 2000);
+          const bytes = parseMode22(raw, did);
+          const decoded = bytes ? `bytes=[${hexBytes(bytes)}]  ${allDecodes(bytes)}` : 'no decode';
+          const mark = bytes && plausibleAny(bytes) ? '  <<< CHECK THIS' : '';
+          plog(`B${hx} → 22${did}  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}  [${decoded}]${mark}`);
+        }
+        // US-platform recipe (Cherokee/Pacifica read trans temp as 21 30)
+        const m21 = await sendCommand('2130', 2000);
+        plog(`B${hx} → 2130  ← RAW "${escapeRaw(m21)}"${nrcNote(m21)}`);
+      }
+    } catch (e: any) {
+      plog(`11-BIT SCAN ERROR: ${e.message}`);
+    } finally {
+      try {
+        await sendCommand('ATST7D', 2000);
+        await sendCommand('ATH0', 2000);
+      } catch {}
     }
 
     for (const c of CANDIDATES_948) {
