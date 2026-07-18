@@ -162,25 +162,77 @@ export async function run948ProbeSweep(): Promise<void> {
       plog(`SESSION ERROR: ${e.message}`);
     }
 
-    // Broadcast discovery: headers ON, receive filter cleared, functional
-    // broadcast (18DB33F1) for each temp DID — ANY module that serves the DID
-    // answers, and with ATH1 the response header names its address (18DAF1xx).
-    // This finds the trans-temp module even if it's not 0x10/0x18.
-    plog('---- Broadcast discovery (ATH1, functional 18DB33F1) ----');
+    // UDS endpoint enumeration: the 2022-van logs proved (a) live modules
+    // answer 3E00 (0x18 → 7E00), (b) this platform ignores functionally-
+    // addressed svc-22 reads, and (c) module 0x18 lacks the Cherokee trans
+    // DIDs even in extended session. So the TCM must live at a different
+    // physical address — walk all 256, then interrogate whoever answers.
+    plog('---- UDS endpoint scan (18DAxxF1 + 3E00, all 256 addrs) ----');
+    const liveAddrs: string[] = [];
     try {
-      for (const at of ['ATSP7', 'ATCP18', 'ATCRA', 'ATSHDB33F1', 'ATH1']) {
-        const r = await sendCommand(at, 2000);
-        plog(`AT  → ${at}  ← "${r.trim()}"`);
+      await sendCommand('ATSP7', 2000);
+      await sendCommand('ATCP18', 2000);
+      // Headers ON: raw responses carry the sender's address (18DAF1xx), so a
+      // slow module's late reply can't be mis-attributed to the next address.
+      await sendCommand('ATH1', 2000);
+      // Short ELM response timeout so dead addresses fail fast (~100 ms).
+      await sendCommand('ATST19', 2000);
+      // Wide receive filter: accept anything addressed to the tester
+      // (18DAF1xx) so we don't need per-address ATCRA. Fall back if the
+      // clone lacks ATCF/ATCM.
+      const cfOk = !(await sendCommand('ATCF18DAF100', 2000)).includes('?');
+      const wideFilter = cfOk && !(await sendCommand('ATCM1FFFFF00', 2000)).includes('?');
+      if (!wideFilter) plog('NOTE: ATCF/ATCM unsupported — using per-address ATCRA (slower)');
+      for (let a = 0; a <= 0xff; a++) {
+        if (a === 0xf1) continue; // the tester's own address
+        const hx = a.toString(16).padStart(2, '0').toUpperCase();
+        await sendCommand(`ATSHDA${hx}F1`, 800);
+        if (!wideFilter) await sendCommand(`ATCRA18DAF1${hx}`, 800);
+        const r = (await sendCommand('3E00', 1200)).trim();
+        if (r && !isNoData(r) && !r.includes('?') && !r.toUpperCase().includes('ERROR')) {
+          liveAddrs.push(hx);
+          plog(`ENDPOINT 0x${hx} ALIVE  ← "${escapeRaw(r)}"`);
+        }
+        if ((a & 0x3f) === 0x3f) plog(`...scanned through 0x${hx}`);
       }
-      await sleep(150);
-      for (const did of ['08DF', 'B010', '9110', '1C44']) {
-        const raw = await sendCommand(`22${did}`, 4000);
-        plog(`BRD → 22${did}  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}`);
-      }
-      await sendCommand('ATH0', 2000); // headers back off for the candidate loop
+      plog(`ENDPOINTS ALIVE: [${liveAddrs.join(', ') || 'none'}]`);
     } catch (e: any) {
-      plog(`BROADCAST ERROR: ${e.message}`);
-      try { await sendCommand('ATH0', 2000); } catch {}
+      plog(`ENDPOINT SCAN ERROR: ${e.message}`);
+    } finally {
+      try {
+        await sendCommand('ATST7D', 2000); // restore ELM response timeout
+        await sendCommand('ATH0', 2000);   // headers back off for later stages
+      } catch {}
+    }
+
+    // Interrogate every live endpoint for the temp DIDs. Lines where either
+    // decode lands in the plausible trans-temp band get a "<<< CHECK THIS"
+    // marker so the winner jumps out of the log.
+    plog('---- Temp DIDs on live endpoints ----');
+    const isPlausibleTemp = (f: number): boolean =>
+      f > (ambientAirF ?? 32) && f < 260 && (coolantF === null || Math.abs(f - coolantF) > 3);
+    const plausibleAny = (bytes: number[]): boolean =>
+      isPlausibleTemp(transTempToF(bytes, false)) ||
+      (bytes.length >= 2 && isPlausibleTemp(transTempToF(bytes, true)));
+    try {
+      for (const hx of liveAddrs.slice(0, 24)) {
+        plog(`-- endpoint 0x${hx} --`);
+        await sendCommand(`ATSHDA${hx}F1`, 2000);
+        await sendCommand(`ATCRA18DAF1${hx}`, 2000);
+        await sleep(100);
+        lastTP = 0;
+        await tp();
+        for (const did of ['08DF', 'B010', '9110', '1C44']) {
+          const raw = await sendCommand(`22${did}`, 2500);
+          const bytes = parseMode22(raw, did);
+          const decoded = bytes ? `bytes=[${hexBytes(bytes)}]  ${allDecodes(bytes)}` : 'no decode';
+          const mark = bytes && plausibleAny(bytes) ? '  <<< CHECK THIS' : '';
+          plog(`EP${hx} → 22${did}  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}  [${decoded}]${mark}`);
+        }
+      }
+      if (liveAddrs.length > 24) plog(`NOTE: ${liveAddrs.length - 24} additional endpoints not probed (cap 24)`);
+    } catch (e: any) {
+      plog(`ENDPOINT PROBE ERROR: ${e.message}`);
     }
 
     for (const c of CANDIDATES_948) {
