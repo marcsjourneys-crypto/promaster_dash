@@ -172,8 +172,9 @@ async function readCycle(c: Candidate948): Promise<number | null> {
     }
     await sleep(100); // Let adapter reconfigure CAN filter
 
-    // Tester-present wakeup — FCA modules go quiet without it
-    await sendCommand('3E01', 1500);
+    // Tester-present wakeup — FCA modules go quiet without it. 3E00 = valid
+    // sub-function (respond); 3E01 is invalid and draws 7F3E12 (2022 van log).
+    await sendCommand('3E00', 1500);
 
     const resp = await sendCommand(c.request, 2500);
     dlog(`Trans948: raw: "${resp}"`);

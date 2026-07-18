@@ -118,6 +118,12 @@ export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult>
   // Probe 29-bit CAN support. sendAtsh auto-falls back to ATCP+3-byte form for
   // cheap ELM327 clones that reject 4-byte ATSH — so `supports29bit` is true
   // even for clones once the split form is accepted.
+  // Broadcast header must match the locked protocol width: ATSH7DF on a 29-bit
+  // van poisons the adapter so ALL Mode 01 polls go NO DATA until re-init (seen
+  // live on a 2022 van whose scan found no candidate, 2026-07-18 probe log).
+  const protocolIs29bit = !(restoreProtocol === '6' || restoreProtocol === '8');
+  const resetHeader = protocolIs29bit ? '18DB33F1' : '7DF';
+
   dlog('Trans scan: Probing 29-bit CAN support (ATSH18DA10F1)...');
   const supports29bit = await sendAtsh('18DA10F1');
   dlog(
@@ -126,13 +132,12 @@ export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult>
       : 'Trans scan: 29-bit CAN NOT SUPPORTED — adapter returned "?" — 29-bit candidates will be skipped',
   );
   // Reset header after probe regardless of outcome
-  await sendCommand('ATSH7DF', 1000);
+  await sendCommand(`ATSH${resetHeader}`, 1000);
 
   // Only try candidates whose CAN width matches the locked protocol. An 11-bit
   // candidate (7E0) can't be polled in 29-bit mode and vice-versa, so saving one
   // the poll loop would then skip leaves trans permanently "NO DATA". This keeps
   // the scan result consistent with pollTransTemp's width guard.
-  const protocolIs29bit = !(restoreProtocol === '6' || restoreProtocol === '8');
 
   for (const candidate of CANDIDATES) {
     // Skip candidates whose CAN width doesn't match the locked protocol
@@ -189,7 +194,7 @@ export async function scanCandidates(restoreProtocol = '0'): Promise<ScanResult>
   // adapter into 29-bit mode (which would break subsequent 11-bit Mode-01 polls).
   try {
     if (supports29bit) {
-      await sendCommand('ATSH7DF', 2000);
+      await sendCommand(`ATSH${resetHeader}`, 2000);
       await sendCommand(`ATSP${restoreProtocol}`, 2000);
     } else {
       await sendCommand('ATSP0', 2000);

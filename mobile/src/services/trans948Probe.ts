@@ -47,6 +47,27 @@ function allDecodes(bytes: number[]): string {
   return parts.join('  ');
 }
 
+/** UDS negative-response codes seen in the wild, for readable logs. */
+const NRC_NAMES: Record<string, string> = {
+  '10': 'generalReject',
+  '11': 'serviceNotSupported',
+  '12': 'subFunctionNotSupported',
+  '13': 'incorrectLength',
+  '22': 'conditionsNotCorrect',
+  '31': 'requestOutOfRange (DID not supported in current session)',
+  '33': 'securityAccessDenied',
+  '78': 'responsePending',
+  '7E': 'subFunctionNotSupportedInActiveSession',
+  '7F': 'serviceNotSupportedInActiveSession',
+};
+
+/** If raw is a UDS negative response (7F <svc> <nrc>), name the NRC. */
+function nrcNote(raw: string): string {
+  const m = raw.replace(/\s/g, '').toUpperCase().match(/7F([0-9A-F]{2})([0-9A-F]{2})/);
+  if (!m) return '';
+  return `  [NRC ${m[2]}: ${NRC_NAMES[m[2]] ?? 'unknown'}]`;
+}
+
 function plog(msg: string): void {
   dlog(`[948TE-PROBE] ${msg}`);
 }
@@ -62,15 +83,16 @@ function escapeRaw(raw: string): string {
 export async function run948ProbeSweep(): Promise<void> {
   const results: ProbeResult[] = [];
 
-  // Tester-present keepalive: FCA modules go quiet without 3E01 every ~3s.
+  // Tester-present keepalive: FCA modules go quiet without 3E00 every ~3s.
+  // (3E00 = respond sub-function; 3E01 is invalid — drew 7F3E12 on a 2022 van.)
   // Sequential (no timer) — sendCommand is strictly one-at-a-time. Sent after
   // each candidate's header setup (so it targets the module being probed) and
   // after each response, which keeps the cadence ≈3s across the sweep.
   let lastTP = 0;
   const tp = async (): Promise<void> => {
     if (Date.now() - lastTP < 2500) return;
-    const r = await sendCommand('3E01', 1500);
-    plog(`TP  → 3E01  ← "${r.trim()}"`);
+    const r = await sendCommand('3E00', 1500);
+    plog(`TP  → 3E00  ← "${r.trim()}"${nrcNote(r)}`);
     lastTP = Date.now();
   };
 
@@ -81,22 +103,24 @@ export async function run948ProbeSweep(): Promise<void> {
 
     // TCM liveness pre-probe: DIDs confirmed alive on the 948TE TCM (module
     // 0x18) via ScanGauge's KL/Renegade XGauge list — present gear (2852) and
-    // turbine speed (A002). If these answer but no temp candidate does, the
-    // TCM is reachable and only the temp DID is wrong; if these are silent
-    // too, suspect protocol/adapter/gateway instead of the DID list.
+    // turbine speed (A002) — plus F190 (VIN) as a default-session control: if
+    // VIN answers but the trans DIDs draw NRC 31, those DIDs are session-gated
+    // or absent; if VIN is also rejected, the module gates everything.
+    const TCM_SETUP = ['ATSP7', 'ATCP18', 'ATSHDA18F1', 'ATCRA18DAF118'];
+    const livenessProbes = [
+      { req: '222852', did: '2852', label: 'present gear' },
+      { req: '22A002', did: 'A002', label: 'turbine speed' },
+      { req: '22F190', did: 'F190', label: 'VIN control' },
+    ];
     plog('---- TCM liveness pre-probe (module 0x18) ----');
     try {
-      for (const at of ['ATSP7', 'ATCP18', 'ATSHDA18F1', 'ATCRA18DAF118']) {
+      for (const at of TCM_SETUP) {
         const r = await sendCommand(at, 2000);
         plog(`AT  → ${at}  ← "${r.trim()}"`);
       }
       await sleep(150);
       lastTP = 0; // force a tester-present right after header setup
       await tp();
-      const livenessProbes = [
-        { req: '222852', did: '2852', label: 'present gear' },
-        { req: '22A002', did: 'A002', label: 'turbine speed' },
-      ];
       for (const lp of livenessProbes) {
         const raw = await sendCommand(lp.req, 3000);
         const bytes = parseMode22(raw, lp.did);
@@ -107,11 +131,56 @@ export async function run948ProbeSweep(): Promise<void> {
             decoded += ` → ${((bytes[0] * 256 + bytes[1]) / 4).toFixed(0)} rpm`;
           }
         }
-        plog(`LIV → ${lp.req} (${lp.label})  ← RAW "${escapeRaw(raw)}"  [${decoded}]`);
+        plog(`LIV → ${lp.req} (${lp.label})  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}  [${decoded}]`);
         await tp();
       }
     } catch (e: any) {
       plog(`LIVENESS ERROR: ${e.message}`);
+    }
+
+    // Extended-session retry: the 2022 van's TCM answered NRC 31 for every DID
+    // in the default session — on Stellantis modules that often means the DID
+    // only serves in extended diagnostic session (10 03). Open it, retry the
+    // key DIDs fast (S3 timeout ≈5 s), then politely return to default (10 01).
+    plog('---- Extended-session retry (module 0x18, UDS 10 03) ----');
+    try {
+      for (const at of TCM_SETUP) {
+        await sendCommand(at, 2000);
+      }
+      await sleep(150);
+      const sess = await sendCommand('1003', 3000);
+      plog(`SES → 1003  ← RAW "${escapeRaw(sess)}"${nrcNote(sess)}`);
+      for (const lp of [...livenessProbes, { req: '2208DF', did: '08DF', label: 'trans temp 08DF' }]) {
+        const raw = await sendCommand(lp.req, 3000);
+        const bytes = parseMode22(raw, lp.did);
+        const decoded = bytes ? `bytes=[${hexBytes(bytes)}]  ${allDecodes(bytes)}` : 'no decode';
+        plog(`SES → ${lp.req} (${lp.label})  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}  [${decoded}]`);
+      }
+      const back = await sendCommand('1001', 2000);
+      plog(`SES → 1001 (back to default)  ← RAW "${escapeRaw(back)}"`);
+    } catch (e: any) {
+      plog(`SESSION ERROR: ${e.message}`);
+    }
+
+    // Broadcast discovery: headers ON, receive filter cleared, functional
+    // broadcast (18DB33F1) for each temp DID — ANY module that serves the DID
+    // answers, and with ATH1 the response header names its address (18DAF1xx).
+    // This finds the trans-temp module even if it's not 0x10/0x18.
+    plog('---- Broadcast discovery (ATH1, functional 18DB33F1) ----');
+    try {
+      for (const at of ['ATSP7', 'ATCP18', 'ATCRA', 'ATSHDB33F1', 'ATH1']) {
+        const r = await sendCommand(at, 2000);
+        plog(`AT  → ${at}  ← "${r.trim()}"`);
+      }
+      await sleep(150);
+      for (const did of ['08DF', 'B010', '9110', '1C44']) {
+        const raw = await sendCommand(`22${did}`, 4000);
+        plog(`BRD → 22${did}  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}`);
+      }
+      await sendCommand('ATH0', 2000); // headers back off for the candidate loop
+    } catch (e: any) {
+      plog(`BROADCAST ERROR: ${e.message}`);
+      try { await sendCommand('ATH0', 2000); } catch {}
     }
 
     for (const c of CANDIDATES_948) {
@@ -132,7 +201,7 @@ export async function run948ProbeSweep(): Promise<void> {
 
         const raw = await sendCommand(c.request, 3000);
         result.raw = raw;
-        plog(`REQ → ${c.request}  ← RAW "${escapeRaw(raw)}"`);
+        plog(`REQ → ${c.request}  ← RAW "${escapeRaw(raw)}"${nrcNote(raw)}`);
         await tp();
 
         const bytes = parseMode22(raw, c.did);
