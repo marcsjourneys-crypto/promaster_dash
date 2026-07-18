@@ -22,7 +22,7 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { dlog } from './debugLog';
 
 /** Flip to true to enable the 948TE PROBE button on the BLE screen. */
-export const TRANS_PROBE_MODE = false;
+export const TRANS_PROBE_MODE = true;
 
 interface ProbeResult {
   candidate: Candidate948;
