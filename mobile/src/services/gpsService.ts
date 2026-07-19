@@ -6,6 +6,7 @@
 import * as Location from 'expo-location';
 import type { GPSData } from '../models/types';
 import { mpsToMph, metersToFeet } from '../utils/geo';
+import { dlog } from './debugLog';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 const GRADE_HISTORY_SIZE = 15;
@@ -64,10 +65,14 @@ export function resetGradeHistory(): void {
 export async function requestPermissions(): Promise<boolean> {
   const { status: foreground } =
     await Location.requestForegroundPermissionsAsync();
-  if (foreground !== 'granted') return false;
+  if (foreground !== 'granted') {
+    dlog(`GPS: foreground permission = ${foreground} — NOT granted, watcher will not start`);
+    return false;
+  }
 
   const { status: background } =
     await Location.requestBackgroundPermissionsAsync();
+  dlog(`GPS: permissions ok (foreground=${foreground}, background=${background})`);
   // Background is optional for now — foreground works for active use
   return true;
 }
@@ -107,15 +112,30 @@ function locationToGPSData(loc: Location.LocationObject): GPSData {
 type GPSCallback = (data: GPSData) => void;
 let locationSubscription: Location.LocationSubscription | null = null;
 
+// Diagnostic fix counter — logs the first 3 fixes then every 30th, so the
+// shareable debug log shows whether CoreLocation is actually delivering.
+let fixCount = 0;
+
 /** Start watching location updates. Calls onUpdate with each GPS reading. */
 export async function startLocationUpdates(
   onUpdate: GPSCallback,
 ): Promise<boolean> {
+  dlog('GPS: startLocationUpdates() called');
   try {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return false;
 
     resetGradeHistory();
+    fixCount = 0;
+
+    // Guard against subscription leak: if a previous watcher is still
+    // registered (e.g. rapid unmount/mount race), remove it before replacing
+    // the module-level handle so it can't linger unreferenced.
+    if (locationSubscription) {
+      dlog('GPS: WARNING — replacing an existing live subscription (leak guard)');
+      locationSubscription.remove();
+      locationSubscription = null;
+    }
 
     locationSubscription = await Location.watchPositionAsync(
       {
@@ -124,13 +144,22 @@ export async function startLocationUpdates(
         distanceInterval: 0,   // Get updates regardless of distance
       },
       (loc) => {
+        fixCount++;
+        if (fixCount <= 3 || fixCount % 30 === 0) {
+          const c = loc.coords;
+          dlog(
+            `GPS: fix #${fixCount} speed=${c.speed?.toFixed(1) ?? 'null'}m/s alt=${c.altitude?.toFixed(0) ?? 'null'}m acc=${c.accuracy?.toFixed(0) ?? 'null'}m`,
+          );
+        }
         const data = locationToGPSData(loc);
         onUpdate(data);
       },
     );
 
+    dlog('GPS: watcher started OK');
     return true;
-  } catch (e) {
+  } catch (e: any) {
+    dlog(`GPS: watcher FAILED to start: ${e.message ?? e}`);
     console.warn('Start location updates failed:', e);
     return false;
   }
@@ -138,6 +167,7 @@ export async function startLocationUpdates(
 
 /** Stop watching location updates. */
 export function stopLocationUpdates(): void {
+  dlog(`GPS: stopLocationUpdates() called (watcher was ${locationSubscription ? 'live' : 'already stopped'}, ${fixCount} fixes delivered)`);
   if (locationSubscription) {
     locationSubscription.remove();
     locationSubscription = null;

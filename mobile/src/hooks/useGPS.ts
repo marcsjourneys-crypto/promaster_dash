@@ -9,6 +9,7 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { startLocationUpdates, stopLocationUpdates } from '../services/gpsService';
 import { onGpsUpdate, onVehicleStateUpdate, restoreTrip, persistTripState } from '../services/tripManager';
 import { initDatabase } from '../services/loggingService';
+import { dlog } from '../services/debugLog';
 import type { GPSData } from '../models/types';
 
 /** Initialize GPS + trip tracking pipeline. */
@@ -18,8 +19,12 @@ export function useGPS(enabled: boolean) {
   const started = useRef(false);
 
   useEffect(() => {
-    if (!enabled || started.current) return;
+    if (!enabled || started.current) {
+      if (!enabled) dlog('GPS: useGPS mounted with enabled=false — live GPS OFF (demo mode?)');
+      return;
+    }
     started.current = true;
+    dlog('GPS: useGPS pipeline starting (dashboard mounted)');
 
     let mounted = true;
 
@@ -30,7 +35,10 @@ export function useGPS(enabled: boolean) {
       // Restore any persisted trip from a previous session
       await restoreTrip();
 
-      if (!mounted) return;
+      if (!mounted) {
+        dlog('GPS: dashboard unmounted during init — watcher NOT started');
+        return;
+      }
 
       // Start GPS — each update flows through the pipeline
       const ok = await startLocationUpdates(async (data: GPSData) => {
@@ -52,11 +60,16 @@ export function useGPS(enabled: boolean) {
       });
 
       if (!ok) {
+        dlog('GPS: pipeline start FAILED — no location updates will flow');
         console.warn('GPS failed to start — check permissions');
       }
     }
 
-    start();
+    start().catch((e: any) => {
+      // A throw anywhere in the init chain (db, restore) would previously die
+      // silently and leave the watcher unstarted — surface it in the log.
+      dlog(`GPS: pipeline start THREW: ${e.message ?? e}`);
+    });
 
     // Persist trip state immediately when app goes to background
     // so minimal data is lost if iOS kills the app
