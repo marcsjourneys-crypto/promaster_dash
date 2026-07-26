@@ -130,6 +130,20 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
             } else {
               dlog('Trans: Auto-scan found no valid candidates');
             }
+
+            // The scan drives the ELM327 through 29-bit physical addressing
+            // (ATSH18DA..F1) + Mode 22 probes. On fragile clones (e.g. V020)
+            // that leaves the CAN peripheral in a state the scan's soft cleanup
+            // (ATSH/ATSP/ATAR) can't undo, so every following Mode 01 poll
+            // returns NO DATA — coolant, fuel trims, and DTCs all go dead, and
+            // only ATRV voltage (adapter-internal) keeps working. A full ATZ
+            // re-init is the only reliable recovery. Only 29-bit probes poison
+            // the bus, so re-init just when the adapter accepted them. The
+            // found candidate survives re-init (it's already in memory + AsyncStorage).
+            if (supports29bit) {
+              dlog('Trans: Re-initializing adapter after 29-bit scan to clear CAN state...');
+              await initializeAdapter();
+            }
           } catch (e: any) {
             dlog(`Trans: Auto-scan error: ${e.message}`);
           }
@@ -164,8 +178,11 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
   const handleScanTrans = useCallback(async () => {
     setScanningTrans(true);
     stopPolling();
+    // Track whether 29-bit probes ran so the finally can recover the bus.
+    let needsReinit = false;
     try {
       const { results, supports29bit } = await scanCandidates(getLockedProtocol());
+      needsReinit = supports29bit;
       setTransResults(results);
       setAdapterSupports29bit(supports29bit);
 
@@ -183,6 +200,10 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
     } catch (e: any) {
       Alert.alert('Scan Error', e.message);
     } finally {
+      // A 29-bit scan can poison fragile clones so all Mode 01 polls return
+      // NO DATA (see handleConnect). A full ATZ re-init is the only reliable
+      // recovery; run it before resuming polling. The saved candidate survives.
+      if (needsReinit) await initializeAdapter();
       startPolling();
       setScanningTrans(false);
     }
