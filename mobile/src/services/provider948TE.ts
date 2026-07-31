@@ -37,16 +37,34 @@ export interface Candidate948 {
 /**
  * 948TE candidates, in sweep order (highest probability first).
  * Sources:
+ *  #0 TCM 0x18 DID 04FE — found by the 2026-07-31 probe sweep on a real 2022
+ *     van: the ONLY data DID the TCM answers (default session, no 10 03
+ *     needed). Read 0x47 = 87.8°F two minutes into a drive while coolant was
+ *     149°F and the ECM's own 04FE (engine-side family, reads with coolant)
+ *     was 192.2°F — so it is module-scoped and provably not an engine-temp
+ *     mirror. Every other DID on 0x18 (incl. ScanGauge's 08DF/2852/A002) drew
+ *     NRC 31 in default AND extended session.
  *  #1 TCM 0x18 DID 08DF, °F = A×1.8−40 — ScanGauge's official Cherokee KL /
  *     Renegade XGauge (18F12208DF, same 948TE trans), matches a promasterforum
  *     OBDLink user-defined PID for the 2022+ PM built with Linear Logic
  *     support; ScanGauge 3 autoscan confirmed reading trans temp on 2022/2025
- *     ProMasters, so this path is known to pass the Secure Gateway.
- *  #2 same DID at the ECM (0x10) in case the 2022+ ECM mirrors it.
+ *     ProMasters. REJECTED (NRC 31) by the 2022 ProMaster TCM — kept for
+ *     other model years.
+ *  #2 same DID at the ECM (0x10) in case the 2022+ ECM mirrors it. (2022 van:
+ *     answers but always 0000 — dead mirror.)
  *  #3/#4 legacy 62TE ECM paths (confirmed 2017–2021 PMs only) as fallbacks.
  *  #5 classic FCA 11-bit TCM — longshot, covers an 11-bit-negotiated van.
+ *     (2022 van: full 0x700–0x7FF scan found zero 11-bit endpoints.)
  */
 export const CANDIDATES_948: Candidate948[] = [
+  {
+    name: '948TE #0: TCM 0x18 DID 04FE (29-bit, 2022 van sweep hit)',
+    setup: ['ATSP7', 'ATCP18', 'ATSHDA18F1', 'ATCRA18DAF118'],
+    request: '2204FE',
+    did: '04FE',
+    decode: 'offset40',
+    minBytes: 1,
+  },
   {
     name: '948TE #1: TCM 0x18 DID 08DF (29-bit, ScanGauge KL/Renegade)',
     setup: ['ATSP7', 'ATCP18', 'ATSHDA18F1', 'ATCRA18DAF118'],
@@ -91,9 +109,12 @@ export const CANDIDATES_948: Candidate948[] = [
 
 /**
  * Candidates validated on a real 2022+ van, tried by probe948TE() at connect.
- * SHIPS EMPTY — promote the winner from a [948TE-PROBE] sweep here.
+ * Promoted from the 2026-07-31 [948TE-PROBE] sweep: TCM 0x18 / 04FE answered
+ * 87.8°F cold (coolant 149°F, ambient 84°F) — the only TCM data DID alive.
+ * PROVISIONAL until a warm-drive log confirms it climbs to ~160-190°F and
+ * does not hover near ambient (which would mean TCM board temp instead).
  */
-export const PROMOTED_948_CANDIDATES: Candidate948[] = [];
+export const PROMOTED_948_CANDIDATES: Candidate948[] = [CANDIDATES_948[0]];
 
 /** Decode a Mode 22 positive-response payload for a 948TE candidate.
  *  div64: (A·256+B)/64 = °F.  offset40: °C = A−40 → °F = A×1.8−40 (the
@@ -153,14 +174,16 @@ let skip948LogCount = 0;
  * decode → range gate. Adapter teardown ALWAYS runs (the setup mutates
  * protocol/receive-filter state the rest of the app never touches).
  *
- * TODO(perf): skip the ATSPn command when it matches getLockedProtocol() to
- * avoid per-poll protocol renegotiation — decide after probe results show
- * whether the winning candidate's protocol matches the van's locked protocol.
+ * When the candidate's ATSPn matches the locked protocol (true for the
+ * promoted #0: both ATSP7 on the 2022 van) the command is skipped entirely —
+ * re-sending it every poll would force a renegotiation on the next request,
+ * the same Mode 01-poisoning churn the post-scan re-init hotfix addressed.
  */
 async function readCycle(c: Candidate948): Promise<number | null> {
   let protocolChanged = false;
   try {
     for (const at of c.setup) {
+      if (at === `ATSP${getLockedProtocol()}`) continue; // already locked — skip
       const r = await sendCommand(at, 1500);
       if (at.startsWith('ATSP')) protocolChanged = true;
       if (r.includes('?')) {
