@@ -111,8 +111,11 @@ export const CANDIDATES_948: Candidate948[] = [
  * Candidates validated on a real 2022+ van, tried by probe948TE() at connect.
  * Promoted from the 2026-07-31 [948TE-PROBE] sweep: TCM 0x18 / 04FE answered
  * 87.8°F cold (coolant 149°F, ambient 84°F) — the only TCM data DID alive.
- * PROVISIONAL until a warm-drive log confirms it climbs to ~160-190°F and
- * does not hover near ambient (which would mean TCM board temp instead).
+ * CONFIRMED trans fluid by the 2026-08-02 drive log: cold-soak it read
+ * exactly ambient (64.4°F, tied with cold coolant), lagged coolant by 18°F
+ * within 35 s of start, and sat 77°F below coolant mid-drive while climbing
+ * ~3°F/min — rules out both a coolant mirror and TCM board temp. (ECM 04FE
+ * is a ~192°F constant even on a cold engine — not live data.)
  */
 export const PROMOTED_948_CANDIDATES: Candidate948[] = [CANDIDATES_948[0]];
 
