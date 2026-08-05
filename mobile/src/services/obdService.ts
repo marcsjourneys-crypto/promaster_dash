@@ -29,7 +29,8 @@ import {
 } from './obdParser';
 import { useVehicleStore } from '../store/vehicleStore';
 import type { OBDData } from '../store/vehicleStore';
-import { PID_REGISTRY, type PidDef } from '../config/pidRegistry';
+import { PID_REGISTRY, getPidDef, type PidDef } from '../config/pidRegistry';
+import { selectDuePoll, batchIdsForHeader } from './pollScheduler';
 import { CANDIDATES, type TransTempCandidate } from './transTempCandidates';
 import type { TransTempProvider } from './transTempProvider';
 
@@ -73,7 +74,10 @@ export async function loadTransCandidate(): Promise<TransTempCandidate | null> {
 }
 
 // Always-polled intervals (ms)
-const INTERVAL_RPM = 500;
+// RPM is relaxed to 2s: the van's own dash shows RPM, and in-app it only feeds
+// the numeric readout and the oil-pressure alert gate (rpm > 800). At 500ms it
+// consumed roughly a third of the BLE bus.
+const INTERVAL_RPM = 2000;
 const INTERVAL_SPEED = 1000;
 const INTERVAL_DTC = 15000;
 
@@ -440,16 +444,14 @@ async function pollTick(): Promise<void> {
   try {
     const schedule = buildSchedule();
 
-    for (const entry of schedule) {
-      if (nextDue[entry.id] === undefined) {
-        nextDue[entry.id] = now;
-      }
-      if (now >= nextDue[entry.id]) {
-        await executePoll(entry.id);
-        nextDue[entry.id] = Date.now() + entry.intervalMs; // actual finish time, not tick-start
-        polled = true;
-        break; // One poll per tick
-      }
+    // Most-overdue due entry wins (schedule order breaks ties). First-due-in-
+    // order starved everything below the fast PIDs when the bus saturated.
+    const dueId = selectDuePoll(schedule, nextDue, now);
+    if (dueId !== null) {
+      const entry = schedule.find((e) => e.id === dueId)!;
+      await executePoll(dueId);
+      nextDue[dueId] = Date.now() + entry.intervalMs; // actual finish time, not tick-start
+      polled = true;
     }
 
     if (polled) {
@@ -740,35 +742,50 @@ const MODE22_CONVERTERS: Record<string, { did: string; header: string; minBytes:
   oilTempF:       { did: '0121', header: '18DA10F1', minBytes: 1, convert: bytesToOilTempF,       storeKey: 'oilTempF' },
 };
 
-async function pollMode22Pid(id: string): Promise<void> {
-  const conv = MODE22_CONVERTERS[id];
+const MODE22_HEADERS: Record<string, string> = Object.fromEntries(
+  Object.entries(MODE22_CONVERTERS).map(([id, c]) => [id, c.header]),
+);
+
+async function pollMode22Pid(primaryId: string): Promise<void> {
+  const conv = MODE22_CONVERTERS[primaryId];
   if (!conv) return;
 
   // The header width must match the locked protocol (see pollTransTemp). Skip
   // rather than send a wrong-width ATSH that corrupts fragile clones.
   const convIs29 = conv.header.length > 3;
   if (convIs29 !== !is11BitProtocol()) {
-    dlog(`OBD: ${id} SKIPPED — header ${conv.header} wrong CAN width for ATSP${lockedProtocol}`);
+    dlog(`OBD: ${primaryId} SKIPPED — header ${conv.header} wrong CAN width for ATSP${lockedProtocol}`);
     return;
   }
 
   const atshOk22 = await sendAtsh(conv.header);
   if (!atshOk22) {
-    dlog(`OBD: ${id} SKIPPED — adapter rejected ATSH${conv.header}`);
+    dlog(`OBD: ${primaryId} SKIPPED — adapter rejected ATSH${conv.header}`);
     return;
   }
   await sleep(100); // Let adapter reconfigure CAN filter
 
-  const resp = await sendCommand(`22${conv.did}`, 2500);
-  dlog(`OBD: ${id} raw: "${resp}"`);
-  const bytes = parseMode22(resp, conv.did);
+  // Read every enabled PID on this header while the session is open — the
+  // set/settle/restore round trips dominate the cost of a Mode 22 poll, so
+  // co-located DIDs (oil pressure + oil temp, both ECM 0x10) piggyback.
+  for (const id of batchIdsForHeader(primaryId, MODE22_HEADERS, isPidEnabled)) {
+    const c = MODE22_CONVERTERS[id];
+    const resp = await sendCommand(`22${c.did}`, 2500);
+    dlog(`OBD: ${id} raw: "${resp}"`);
+    const bytes = parseMode22(resp, c.did);
 
-  if (bytes && bytes.length >= conv.minBytes) {
-    const value = conv.convert(bytes);
-    dlog(`OBD: ${id} = ${value.toFixed(1)}`);
-    useVehicleStore.getState().updateOBD({ [conv.storeKey]: value } as Partial<OBDData>);
-  } else {
-    dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
+    if (bytes && bytes.length >= c.minBytes) {
+      const value = c.convert(bytes);
+      dlog(`OBD: ${id} = ${value.toFixed(1)}`);
+      useVehicleStore.getState().updateOBD({ [c.storeKey]: value } as Partial<OBDData>);
+    } else {
+      dlog(`OBD: ${id} parse FAILED for raw: "${resp}"`);
+    }
+
+    // Re-arm the piggybacked PID's schedule slot; the loop re-arms the primary.
+    if (id !== primaryId) {
+      nextDue[id] = Date.now() + (getPidDef(id)?.intervalMs ?? 1500);
+    }
   }
 
   // Reset header to the protocol's functional broadcast + flush. Unconditional —
