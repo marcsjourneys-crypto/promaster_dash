@@ -12,6 +12,8 @@ import {
   isSaneVin,
   payloadsEqual,
   buildAddressProbeSequence,
+  reassembleUdsPayload,
+  parseFingerprint,
   FINGERPRINT_DIDS,
   KNOWN_LIVE_TARGETS,
 } from '../bodySweepCore';
@@ -138,6 +140,42 @@ describe('payloadsEqual (constant detection)', () => {
     expect(payloadsEqual([0x01], [0x01, 0x02])).toBe(false);
     expect(payloadsEqual(null, [0x01])).toBe(false);
     expect(payloadsEqual([0x01], null)).toBe(false);
+  });
+});
+
+describe('multi-frame reassembly (real fixtures from the 2014 van, 2026-08-13)', () => {
+  // Actual ELM RAW captured on the van — VIN F190, split across 3 frames.
+  const VIN_RAW = '014\r0:62F190334336\r1:54525644473145\r2:45313136373930';
+  const SERIAL_28_RAW = '012\r0:62F18C543030\r1:34463232383330\r2:3836393420';
+
+  it('reassembles frame-indexed lines into one hex string', () => {
+    expect(reassembleUdsPayload(VIN_RAW)).toBe('62F1903343365452564447314545313136373930');
+  });
+
+  it('passes a single-frame response through untouched', () => {
+    expect(reassembleUdsPayload('62F1950207')).toBe('62F1950207');
+  });
+
+  it('recovers the full 17-char VIN the line-by-line parser truncated to "3C6"', () => {
+    const bytes = parseFingerprint(VIN_RAW, 'F190');
+    expect(bytes).not.toBeNull();
+    expect(bytes).toHaveLength(17);
+    expect(decodeAscii(bytes!)).toBe('3C6TRVDG1EE116790');
+  });
+
+  it('recovers a multi-frame serial number', () => {
+    const bytes = parseFingerprint(SERIAL_28_RAW, 'F18C');
+    expect(bytes).not.toBeNull();
+    // "T004F228308694" plus trailing pad
+    expect(decodeAscii(bytes!).trim()).toBe('T004F228308694');
+  });
+
+  it('parses a single-frame fingerprint like the shipping parser', () => {
+    expect(parseFingerprint('62F1950207', 'F195')).toEqual([0x02, 0x07]);
+  });
+
+  it('returns null for a negative response', () => {
+    expect(parseFingerprint('7F2231', 'F18A')).toBeNull();
   });
 });
 

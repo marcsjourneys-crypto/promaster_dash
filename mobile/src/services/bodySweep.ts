@@ -25,15 +25,15 @@
 // =============================================================================
 
 import { sendCommand, sendAtsh } from './obdTransport';
-import { parseMode22 } from './obdParser';
 import { getBroadcastHeader, initializeAdapter } from './obdService';
 import { dlog } from './debugLog';
 import {
   BODY_SWEEP_TARGETS,
   KNOWN_LIVE_TARGETS,
   FINGERPRINT_DIDS,
-  BODY_SWEEP_DID_TARGET,
+  BODY_SWEEP_DID_TARGETS,
   BODY_SWEEP_DID_PAGES,
+  parseFingerprint,
   normTarget,
   physicalHeader,
   receiveFilter,
@@ -97,10 +97,10 @@ async function resetHeader(): Promise<void> {
   }
 }
 
-/** Read one DID and return the raw string plus parsed payload. */
+/** Read one DID and return the raw string plus parsed payload (multi-frame aware). */
 async function readDid(did: string, timeout: number): Promise<{ raw: string; bytes: number[] | null }> {
   const raw = await sendCommand(`22${did}`, timeout);
-  return { raw, bytes: parseMode22(raw, did) };
+  return { raw, bytes: parseFingerprint(raw, did) };
 }
 
 /**
@@ -109,7 +109,7 @@ async function readDid(did: string, timeout: number): Promise<{ raw: string; byt
  *
  * Phase 1: address sweep  — which 18DA<target>F1 answer 3E00.
  * Phase 2: fingerprint    — VIN / serial / SW version on each responder.
- * Phase 3: DID sweep      — optional, one configured address.
+ * Phase 3: DID sweep      — optional, the configured addresses.
  */
 export async function runBodySweep(): Promise<void> {
   const responders: string[] = [];
@@ -183,16 +183,19 @@ export async function runBodySweep(): Promise<void> {
       }
     }
 
-    // ---- Phase 3: optional DID sweep on one configured address ----
-    if (BODY_SWEEP_DID_TARGET) {
-      const t = normTarget(BODY_SWEEP_DID_TARGET);
+    // ---- Phase 3: optional DID sweep on the configured address(es) ----
+    if (BODY_SWEEP_DID_TARGETS.length > 0) {
       const dids = expandDidPages(BODY_SWEEP_DID_PAGES);
-      plog(`---- Phase 3: DID sweep on 0x${t} (${dids.length} DIDs across pages [${BODY_SWEEP_DID_PAGES.join(', ')}]) ----`);
-      const hits: string[] = [];
-      try {
-        if (!(await aimAtTarget(t))) {
-          plog(`0x${t}: ATSH rejected — cannot DID-sweep`);
-        } else {
+      plog(`---- Phase 3: DID sweep on [${BODY_SWEEP_DID_TARGETS.map((x) => '0x' + normTarget(x)).join(', ')}] (${dids.length} DIDs/module across pages [${BODY_SWEEP_DID_PAGES.join(', ')}]) ----`);
+      for (const target of BODY_SWEEP_DID_TARGETS) {
+        const t = normTarget(target);
+        plog(`-- DID sweep 0x${t} --`);
+        const hits: string[] = [];
+        try {
+          if (!(await aimAtTarget(t))) {
+            plog(`0x${t}: ATSH rejected — cannot DID-sweep`);
+            continue;
+          }
           await sendCommand('ATST19', PROBE_TIMEOUT); // fast fail on dead DIDs
           await sleep(60);
           await sendCommand('3E00', PROBE_TIMEOUT);
@@ -203,35 +206,37 @@ export async function runBodySweep(): Promise<void> {
               await sleep(120);
               const second = await readDid(did, PROBE_TIMEOUT);
               const constant = payloadsEqual(first.bytes, second.bytes);
-              const tag = constant ? '[CONSTANT? — suspect, a response is not a value]' : '[VARYING — candidate]';
+              // A varying, multi-byte payload is the pressure-shaped signal.
+              const pressureHint = !constant && first.bytes.length >= 4 ? '  (multi-byte — check for 4 tires)' : '';
+              const tag = constant ? '[CONSTANT? — suspect, a response is not a value]' : `[VARYING — candidate]${pressureHint}`;
               hits.push(did);
-              plog(`DID ${did} POSITIVE  ← "${escapeRaw(first.raw)}"  bytes=[${hexBytes(first.bytes)}]  ${tag}`);
+              plog(`0x${t} DID ${did} POSITIVE  ← "${escapeRaw(first.raw)}"  bytes=[${hexBytes(first.bytes)}]  ${tag}`);
             } else {
               const kind = classifyResponse(first.raw, did);
               if (kind === 'nrc' && nrcCode(first.raw) === '31') {
                 // NRC 31 is the expected "not supported" — don't log each, too noisy.
               } else if (kind !== 'no-data' && kind !== 'empty') {
-                plog(`DID ${did} ${kind.toUpperCase()}  ← "${escapeRaw(first.raw)}"${nrcNote(first.raw)}`);
+                plog(`0x${t} DID ${did} ${kind.toUpperCase()}  ← "${escapeRaw(first.raw)}"${nrcNote(first.raw)}`);
               }
             }
           }
           try { await sendCommand('ATST7D', PROBE_TIMEOUT); } catch {}
+        } catch (e: any) {
+          plog(`DID SWEEP 0x${t} ERROR: ${e.message}`);
+        } finally {
+          await resetHeader();
         }
-      } catch (e: any) {
-        plog(`DID SWEEP ERROR: ${e.message}`);
-      } finally {
-        await resetHeader();
+        plog(`DID SWEEP POSITIVES on 0x${t}: [${hits.join(', ') || 'none'}]`);
       }
-      plog(`DID SWEEP POSITIVES on 0x${t}: [${hits.join(', ') || 'none'}]`);
     } else {
-      plog('Phase 3: DID sweep skipped (set BODY_SWEEP_DID_TARGET to a responder to enable).');
+      plog('Phase 3: DID sweep skipped (set BODY_SWEEP_DID_TARGETS to enable).');
     }
 
     plog('================ SUMMARY ================');
     plog(`Responders: [${responders.map((r) => '0x' + r).join(', ') || 'none'}]`);
     const fresh = responders.filter((r) => !KNOWN_LIVE_TARGETS.includes(r));
     plog(`New (not in prior powertrain census): [${fresh.map((r) => '0x' + r).join(', ') || 'none'}]`);
-    plog('Next: for a body/TPMS module, look for a responder returning a sane VIN (real module), then set BODY_SWEEP_DID_TARGET to it and re-run for the DID sweep. Ground-truth pressures with the 30/40/50/60 method (vault: TPMS Hunt).');
+    plog('Next: a VARYING multi-byte DID is the pressure-shaped signal. Ground-truth with the 30/40/50/60 method (vault: TPMS Hunt) — set four distinct known pressures and confirm four candidate values track them.');
     plog('================ BODY SWEEP END ================');
   } finally {
     // The sweep changed the header, receive filter, and ST timeout — wipe it all

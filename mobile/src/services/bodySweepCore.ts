@@ -44,12 +44,13 @@ export const FINGERPRINT_DIDS: { did: string; label: string; ascii: boolean }[] 
 ];
 
 /**
- * Optional DID sweep. Set BODY_SWEEP_DID_TARGET to a target byte (e.g. '40')
- * that answered the address sweep, and the sweep will walk BODY_SWEEP_DID_PAGES
- * on it after fingerprinting. Leave null to skip.
+ * Optional DID sweep. List the target bytes (from the address sweep) to walk
+ * after fingerprinting; each is swept over BODY_SWEEP_DID_PAGES. Empty = skip.
+ * 2026-08-13: 0x28 and 0x40 are the two live non-powertrain modules on the 2014
+ * van (both returned VIN + serial) — the TPMS candidates. See "TPMS Hunt".
  */
-export const BODY_SWEEP_DID_TARGET: string | null = null;
-export const BODY_SWEEP_DID_PAGES: string[] = ['F1', '00', '01', '02', '25', '28', '29'];
+export const BODY_SWEEP_DID_TARGETS: string[] = ['28', '40'];
+export const BODY_SWEEP_DID_PAGES: string[] = ['F1', '00', '01', '02', '03', '04', '1A', '25', '28', '29'];
 
 // ---------------------------------------------------------------------------
 // Addressing
@@ -176,6 +177,53 @@ export function escapeRaw(raw: string): string {
 export function payloadsEqual(a: number[] | null, b: number[] | null): boolean {
   if (!a || !b || a.length !== b.length) return false;
   return a.every((v, i) => v === b[i]);
+}
+
+/**
+ * Reassemble an ELM multi-frame (ISO-TP) response into one hex string.
+ *
+ * A long UDS reply is printed by the ELM as a length header line then
+ * frame-indexed lines, e.g. VIN F190:
+ *   "014" / "0:62F190334336" / "1:54525644473145" / "2:45313136373930"
+ * Single-frame replies ("62F1950207") have no "N:" prefixes and pass through.
+ * Whitespace/CR are ignored. Returns upper-case hex with no separators.
+ */
+export function reassembleUdsPayload(raw: string): string {
+  const lines = (raw ?? '').split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+  const frameLines = lines.filter((l) => /^[0-9A-F]+:/i.test(l));
+  if (frameLines.length > 0) {
+    return frameLines
+      .map((l) => l.replace(/^[0-9A-F]+:\s*/i, '').replace(/\s/g, ''))
+      .join('')
+      .toUpperCase();
+  }
+  return lines.join('').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+}
+
+/**
+ * Parse a Mode 22 reply for `did`, reassembling multi-frame responses first.
+ *
+ * Single-frame goes through the shipping parseMode22 unchanged; multi-frame
+ * (VIN, serial) is reassembled here — parseMode22 matches line-by-line and so
+ * only ever saw the first frame. Sweep-only: the shipping trans-temp path keeps
+ * using parseMode22 directly.
+ */
+export function parseFingerprint(raw: string, did: string): number[] | null {
+  const single = parseMode22(raw, did);
+  const hasFrames = /(^|[\r\n])[0-9A-F]+:/i.test(raw ?? '');
+  if (!hasFrames) return single;
+
+  const hex = reassembleUdsPayload(raw);
+  const marker = ('62' + did).toUpperCase();
+  const idx = hex.indexOf(marker);
+  if (idx < 0) return single; // negative response / no marker — fall back
+
+  const dataHex = hex.slice(idx + marker.length);
+  const bytes: number[] = [];
+  for (let i = 0; i + 1 < dataHex.length; i += 2) {
+    bytes.push(parseInt(dataHex.substr(i, 2), 16));
+  }
+  return bytes.length ? bytes : single;
 }
 
 // ---------------------------------------------------------------------------
