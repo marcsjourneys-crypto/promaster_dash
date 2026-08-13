@@ -135,6 +135,9 @@ export function classifyResponse(raw: string, did?: string): ResponseKind {
   if (flat.includes('?')) return 'rejected';
   if (did && parseMode22(raw, did) !== null) return 'positive';
   if (!did && /62[0-9A-F]{4}/.test(flat)) return 'positive';
+  // Positive response to tester-present: 0x3E + 0x40 = 0x7E, e.g. "7E00". A
+  // module that answers this is live — the address-sweep's main success signal.
+  if (/7E[0-9A-F]{2}/.test(flat)) return 'positive';
   if (nrcCode(raw) !== null) return 'nrc';
   return 'other';
 }

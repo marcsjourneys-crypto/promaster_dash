@@ -67,6 +67,14 @@ describe('classifyResponse', () => {
     expect(classifyResponse('7F 22 31')).toBe('nrc');
   });
 
+  it('recognises a positive tester-present reply (7E = 3E + 40)', () => {
+    // A module answering 3E00 replies 7E00 — a live address, not "other".
+    expect(classifyResponse('7E00')).toBe('positive');
+    expect(classifyResponse('7E 00')).toBe('positive');
+    // A negative 3E (sub-function not supported) is still an NRC, not positive.
+    expect(classifyResponse('7F3E12')).toBe('nrc');
+  });
+
   it('distinguishes silence, clone rejection, and emptiness', () => {
     expect(classifyResponse('NO DATA')).toBe('no-data');
     expect(classifyResponse('?')).toBe('rejected');
