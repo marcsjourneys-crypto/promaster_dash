@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-08-12** — this content now lives in the Obsidian vault:
+> **ProMaster / OBD Service + OBD Parser + Poll Scheduler (02 Modules)**.
+> Kept for history. Edit the vault note, not this file.
+
+---
+
 # OBD Service Implementation Plan
 ProMaster Adventure Dash — Implementation blueprint for `services/obd_service.py`  
 Target: 2014 Ram ProMaster (gas), 62TE trans  

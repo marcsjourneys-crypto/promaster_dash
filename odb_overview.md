@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-08-12** — this content now lives in the Obsidian vault:
+> **ProMaster / OBD Protocol Primer + AT Command Reference (05 Reference)**.
+> Kept for history. Edit the vault note, not this file.
+
+---
+
 # OBD Deep Dive
 ProMaster Adventure Dash — OBD2/UDS Integration Notes  
 Target vehicle: 2014 Ram ProMaster (gas), 62TE transmission  

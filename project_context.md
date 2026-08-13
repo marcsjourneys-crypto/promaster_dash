@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-08-12** — this content now lives in the Obsidian vault:
+> **ProMaster / App Architecture (01 Architecture) + Legacy Python Dashboard (09 Archive)**.
+> Kept for history. Edit the vault note, not this file.
+
+---
+
 # ProMaster Adventure Dash
 Raspberry Pi 5 Vehicle Dashboard System  
 Vehicle: 2014 Ram ProMaster (Gas, 62TE Transmission)

@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-08-12** — this content now lives in the Obsidian vault:
+> **ProMaster / Pi Power & Shutdown (09 Archive)**.
+> Kept for history. Edit the vault note, not this file.
+
+---
+
 # Power System & Soft Shutdown Design
 ProMaster Adventure Dash  
 Raspberry Pi 5 + UPS HAT + Vehicle 12V System

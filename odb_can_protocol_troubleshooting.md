@@ -1,3 +1,9 @@
+> **SUPERSEDED 2026-08-12** — this content now lives in the Obsidian vault:
+> **ProMaster / CAN Protocol Runbook (04 Operations)**.
+> Kept for history. Edit the vault note, not this file.
+
+---
+
 # OBD CAN-Protocol Troubleshooting Runbook
 
 **Vehicle:** 2014 Ram ProMaster (gas), 62TE transmission
