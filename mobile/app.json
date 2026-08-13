@@ -2,7 +2,7 @@
   "expo": {
     "name": "ProMaster Dash",
     "slug": "promaster-dash",
-    "version": "2.0.0",
+    "version": "2.5.0",
     "orientation": "portrait",
     "icon": "./assets/PD.png",
     "userInterfaceStyle": "dark",
@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "14",
+      "buildNumber": "1",
       "bundleIdentifier": "com.promasterdash.app",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ProMaster Dash uses your location to track trips and display speed, heading, and elevation.",

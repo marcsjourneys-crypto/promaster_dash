@@ -30,6 +30,8 @@ import { resolveTransPath, latchTransPath } from '../services/transPathResolver'
 import { provider62TE, getLast62ScanResult } from '../services/provider62TE';
 // TEMPORARY DIAGNOSTIC (948TE probe mode) — see trans948Probe.ts to remove
 import { TRANS_PROBE_MODE, run948ProbeSweep } from '../services/trans948Probe';
+// TEMPORARY DIAGNOSTIC (body-module address sweep) — see bodySweep.ts to remove
+import { BODY_SWEEP_MODE, runBodySweep } from '../services/bodySweep';
 
 import { dlog } from '../services/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -49,6 +51,7 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
   const [connectedName, setConnectedName] = useState(getConnectedDeviceName());
   const [scanningTrans, setScanningTrans] = useState(false);
   const [probing948, setProbing948] = useState(false); // TEMPORARY DIAGNOSTIC (948TE probe)
+  const [bodySweeping, setBodySweeping] = useState(false); // TEMPORARY DIAGNOSTIC (body sweep)
   const [transResults, setTransResults] = useState<CandidateResult[]>([]);
   const [adapterSupports29bit, setAdapterSupports29bit] = useState<boolean | null>(null);
   const [savedDevice, setSavedDevice] = useState<ScannedDevice | null>(null);
@@ -220,6 +223,38 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
     }
   }, []);
 
+  // TEMPORARY DIAGNOSTIC — body-module address sweep (see bodySweep.ts to remove)
+  const handleBodySweep = useCallback(async () => {
+    Alert.alert(
+      'Run Body Sweep?',
+      'PARKED ONLY. This walks 29-bit module addresses and takes several minutes, ' +
+        'blanking the gauges until it finishes and re-initializes the adapter. Do not drive.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Run',
+          style: 'destructive',
+          onPress: async () => {
+            setBodySweeping(true);
+            stopPolling();
+            try {
+              await runBodySweep();
+              Alert.alert(
+                'Body Sweep Complete',
+                'Open Settings → Data → View Debug Log and SHARE the [BODY-SWEEP] SUMMARY block.',
+              );
+            } catch (e: any) {
+              Alert.alert('Body Sweep Error', e.message);
+            } finally {
+              startPolling();
+              setBodySweeping(false);
+            }
+          },
+        },
+      ],
+    );
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -292,6 +327,16 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
                 <ActivityIndicator color={colors.textPrimary} />
               ) : (
                 <Text style={styles.actionBtnText}>948TE PROBE</Text>
+              )}
+            </Pressable>
+          )}
+          {/* TEMPORARY DIAGNOSTIC — body-module sweep button (see bodySweep.ts to remove) */}
+          {BODY_SWEEP_MODE && (
+            <Pressable style={styles.actionBtn} onPress={handleBodySweep} disabled={bodySweeping || probing948 || scanningTrans || connecting}>
+              {bodySweeping ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.actionBtnText}>BODY SWEEP</Text>
               )}
             </Pressable>
           )}
