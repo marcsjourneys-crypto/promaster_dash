@@ -46,11 +46,30 @@ export const FINGERPRINT_DIDS: { did: string; label: string; ascii: boolean }[] 
 /**
  * Optional DID sweep. List the target bytes (from the address sweep) to walk
  * after fingerprinting; each is swept over BODY_SWEEP_DID_PAGES. Empty = skip.
- * 2026-08-13: 0x28 and 0x40 are the two live non-powertrain modules on the 2014
- * van (both returned VIN + serial) — the TPMS candidates. See "TPMS Hunt".
+ * 2026-08-16 (Run 3): 0x40 self-identified as the BCM ("BCM637.002") — the
+ * normal TPMS host on the Ducato, so it is now the sole target. 0x28 is a real
+ * module but unnamed; dropped for now to spend the time on the BCM. See "TPMS Hunt".
  */
-export const BODY_SWEEP_DID_TARGETS: string[] = ['28', '40'];
-export const BODY_SWEEP_DID_PAGES: string[] = ['F1', '00', '01', '02', '03', '04', '1A', '25', '28', '29'];
+export const BODY_SWEEP_DID_TARGETS: string[] = ['40'];
+
+/**
+ * DID pages to walk per target. Run 3 saw only F1xx (identification) answer in
+ * the default session — all data pages returned NRC 31, likely session-gated.
+ * Build 3 opens an extended session first (see BODY_SWEEP_DID_EXTENDED_SESSION)
+ * and walks a wider low-page range where sensor data usually lives.
+ */
+export const BODY_SWEEP_DID_PAGES: string[] = [
+  'F1', // identification block — sanity check the session is alive
+  ...expandTargetRange(0x00, 0x1f), // low data pages (00–1F)
+  '20', '21', '22', '25', '28', '29', '2A', '2B',
+];
+
+/**
+ * Open an extended diagnostic session (UDS 10 03) before the DID sweep, with
+ * tester-present keepalive, and return to default (10 01) after. Many FCA body
+ * DIDs answer NRC 31 in the default session and only become readable here.
+ */
+export const BODY_SWEEP_DID_EXTENDED_SESSION = true;
 
 // ---------------------------------------------------------------------------
 // Addressing

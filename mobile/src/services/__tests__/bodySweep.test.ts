@@ -16,6 +16,8 @@ import {
   parseFingerprint,
   FINGERPRINT_DIDS,
   KNOWN_LIVE_TARGETS,
+  BODY_SWEEP_DID_TARGETS,
+  BODY_SWEEP_DID_PAGES,
 } from '../bodySweepCore';
 
 describe('address helpers', () => {
@@ -218,5 +220,17 @@ describe('sweep constants', () => {
   });
   it('carries the prior powertrain census as known-live', () => {
     expect(KNOWN_LIVE_TARGETS).toEqual(['10', '18', '1F', '40', '60', 'C6', 'C7', 'CB']);
+  });
+
+  it('DID sweep targets only the BCM (0x40) after Run 3', () => {
+    expect(BODY_SWEEP_DID_TARGETS).toEqual(['40']);
+  });
+
+  it('DID pages include F1 plus the low data-page range 00-1F', () => {
+    expect(BODY_SWEEP_DID_PAGES).toContain('F1');
+    expect(BODY_SWEEP_DID_PAGES).toContain('00');
+    expect(BODY_SWEEP_DID_PAGES).toContain('1F');
+    // 1 (F1) + 32 (00-1F) + 8 extras
+    expect(BODY_SWEEP_DID_PAGES).toHaveLength(41);
   });
 });

@@ -33,6 +33,7 @@ import {
   FINGERPRINT_DIDS,
   BODY_SWEEP_DID_TARGETS,
   BODY_SWEEP_DID_PAGES,
+  BODY_SWEEP_DID_EXTENDED_SESSION,
   parseFingerprint,
   normTarget,
   physicalHeader,
@@ -59,6 +60,11 @@ export const BODY_SWEEP_MODE = true;
 const PROBE_TIMEOUT = 1200;
 /** Timeout for the (possibly multi-frame) fingerprint reads. */
 const FINGERPRINT_TIMEOUT = 3000;
+
+/** Guards against a second sweep starting while one is already running — two
+ *  concurrent runs interleave commands on the one BLE link and wedge it
+ *  (seen live 2026-08-16). */
+let sweepInProgress = false;
 
 function plog(msg: string): void {
   dlog(`[BODY-SWEEP] ${msg}`);
@@ -112,6 +118,12 @@ async function readDid(did: string, timeout: number): Promise<{ raw: string; byt
  * Phase 3: DID sweep      — optional, the configured addresses.
  */
 export async function runBodySweep(): Promise<void> {
+  if (sweepInProgress) {
+    plog('IGNORED — a sweep is already running. Wait for it to finish (SUMMARY line).');
+    return;
+  }
+  sweepInProgress = true;
+
   const responders: string[] = [];
 
   try {
@@ -186,11 +198,20 @@ export async function runBodySweep(): Promise<void> {
     // ---- Phase 3: optional DID sweep on the configured address(es) ----
     if (BODY_SWEEP_DID_TARGETS.length > 0) {
       const dids = expandDidPages(BODY_SWEEP_DID_PAGES);
-      plog(`---- Phase 3: DID sweep on [${BODY_SWEEP_DID_TARGETS.map((x) => '0x' + normTarget(x)).join(', ')}] (${dids.length} DIDs/module across pages [${BODY_SWEEP_DID_PAGES.join(', ')}]) ----`);
+      const sessionNote = BODY_SWEEP_DID_EXTENDED_SESSION ? 'extended session (10 03)' : 'default session';
+      plog(`---- Phase 3: DID sweep on [${BODY_SWEEP_DID_TARGETS.map((x) => '0x' + normTarget(x)).join(', ')}] in ${sessionNote} (${dids.length} DIDs/module across pages [${BODY_SWEEP_DID_PAGES.join(', ')}]) ----`);
       for (const target of BODY_SWEEP_DID_TARGETS) {
         const t = normTarget(target);
         plog(`-- DID sweep 0x${t} --`);
         const hits: string[] = [];
+        // Tester-present keepalive: keeps an extended session from timing out
+        // (S3 ~5 s) during long NRC-31 stretches. Sent at most every ~2.5 s.
+        let lastTP = 0;
+        const keepAlive = async (): Promise<void> => {
+          if (Date.now() - lastTP < 2500) return;
+          await sendCommand('3E00', PROBE_TIMEOUT);
+          lastTP = Date.now();
+        };
         try {
           if (!(await aimAtTarget(t))) {
             plog(`0x${t}: ATSH rejected — cannot DID-sweep`);
@@ -198,8 +219,15 @@ export async function runBodySweep(): Promise<void> {
           }
           await sendCommand('ATST19', PROBE_TIMEOUT); // fast fail on dead DIDs
           await sleep(60);
-          await sendCommand('3E00', PROBE_TIMEOUT);
-          for (const did of dids) {
+          lastTP = 0;
+          await keepAlive(); // 3E00 (also a default-session tester-present)
+          if (BODY_SWEEP_DID_EXTENDED_SESSION) {
+            const sess = await sendCommand('1003', PROBE_TIMEOUT);
+            plog(`0x${t} → 10 03 (extended session)  ← "${escapeRaw(sess)}"${nrcNote(sess)}`);
+          }
+          for (let i = 0; i < dids.length; i++) {
+            const did = dids[i];
+            await keepAlive();
             const first = await readDid(did, PROBE_TIMEOUT);
             if (first.bytes) {
               // Positive — read again to tell a live value from a constant.
@@ -219,6 +247,13 @@ export async function runBodySweep(): Promise<void> {
                 plog(`0x${t} DID ${did} ${kind.toUpperCase()}  ← "${escapeRaw(first.raw)}"${nrcNote(first.raw)}`);
               }
             }
+            // Heartbeat every 128 DIDs so an all-NRC-31 stretch can't look frozen.
+            if ((i & 0x7f) === 0x7f) {
+              plog(`...swept ${i + 1}/${dids.length} on 0x${t} (through ${did}), ${hits.length} positive(s)`);
+            }
+          }
+          if (BODY_SWEEP_DID_EXTENDED_SESSION) {
+            try { await sendCommand('1001', PROBE_TIMEOUT); } catch {} // back to default session
           }
           try { await sendCommand('ATST7D', PROBE_TIMEOUT); } catch {}
         } catch (e: any) {
@@ -248,5 +283,6 @@ export async function runBodySweep(): Promise<void> {
     } catch (e: any) {
       plog(`Adapter re-init FAILED: ${e.message} — power-cycle the adapter if gauges stay dead`);
     }
+    sweepInProgress = false;
   }
 }

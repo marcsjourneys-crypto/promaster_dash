@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "2",
+      "buildNumber": "3",
       "bundleIdentifier": "com.promasterdash.app",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ProMaster Dash uses your location to track trips and display speed, heading, and elevation.",
