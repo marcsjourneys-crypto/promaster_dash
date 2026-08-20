@@ -128,13 +128,17 @@ export default function App() {
     setScreen('dashboard');
   }, []);
 
+  // `next` is built outside the updater on purpose: a setState updater must be
+  // pure, and under StrictMode React invokes it twice — so the write ran twice
+  // per toggle. The promise is also handled here rather than left floating.
+  // Persisting focusActive is best-effort (worst case the toggle does not
+  // survive a restart), so this swallows the failure instead of awaiting it the
+  // way SettingsScreen.handleSave does.
   const handleSetFocusActive = useCallback((active: boolean) => {
-    setSettings((prev) => {
-      const next = { ...prev, focusActive: active };
-      saveSettings(next);
-      return next;
-    });
-  }, []);
+    const next = { ...settings, focusActive: active };
+    setSettings(next);
+    saveSettings(next).catch(() => {});
+  }, [settings]);
 
   const handleDisclaimerAccept = useCallback(async () => {
     await saveDisclaimerAccepted();
