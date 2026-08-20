@@ -32,18 +32,27 @@ export function FocusView({ gauges, units, onExit, onNavigate }: FocusViewProps)
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Adapter dropped — the only signal, since the BLE pill is hidden here */}
-      {!bleConnected && (
-        <View style={styles.disconnectStrip}>
-          <Text style={styles.disconnectText}>ADAPTER DISCONNECTED</Text>
-        </View>
-      )}
+      {/*
+        Fixed-height header slot. Both children below are conditional, and the
+        gauge stack is flex:1 — so if this space were not reserved, an alert
+        firing mid-drive would silently shrink all three gauges at once. The
+        approved design is "banner only, layout never changes". Keep the height
+        even when nothing is showing; do NOT collapse it to save pixels.
+      */}
+      <View style={styles.headerSlot}>
+        {/* Adapter dropped — the only signal, since the BLE pill is hidden here */}
+        {!bleConnected && (
+          <View style={styles.disconnectStrip}>
+            <Text style={styles.disconnectText}>ADAPTER DISCONNECTED</Text>
+          </View>
+        )}
 
-      <AlertBanner
-        message={alertMessage}
-        priority={alertPriority}
-        onPress={() => onNavigate?.('alerts')}
-      />
+        <AlertBanner
+          message={alertMessage}
+          priority={alertPriority}
+          onPress={() => onNavigate?.('alerts')}
+        />
+      </View>
 
       <View style={styles.gauges}>
         {gauges.map((pid) => {
@@ -81,6 +90,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 6,
     paddingBottom: 6,
+  },
+  /**
+   * Reserved header space — always present, alert or not.
+   *
+   * Height = one AlertBanner at its natural size:
+   *   borderWidth 2 x 2 (top + bottom)      =  4
+   *   paddingVertical 12 x 2                = 24
+   *   one line of fonts.sizeLg (20) text    = 24   (~1.2x line box)
+   *                                          ----
+   *                                            52
+   *
+   * `overflow: 'hidden'` is the guarantee, not a cosmetic choice: if both the
+   * disconnect strip and a two-line banner are showing, the surplus is clipped
+   * here rather than pushing into the gauge stack. Gauges never resize.
+   */
+  headerSlot: {
+    height: 52,
+    overflow: 'hidden',
   },
   gauges: {
     flex: 1,
