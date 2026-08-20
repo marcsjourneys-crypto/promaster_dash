@@ -582,11 +582,12 @@ After the `store` destructuring and **after** all hook calls (`useKeepAwake`, `u
 
 ```tsx
   const focusGauges = React.useMemo(
-    () => resolveFocusGauges(focusPids, {
-      supported: supportedMode01Pids,
-      done: mode01DiscoveryDone,
-    }),
-    [focusPids, supportedMode01Pids, mode01DiscoveryDone],
+    () => resolveFocusGauges(
+      focusPids,
+      { supported: supportedMode01Pids, done: mode01DiscoveryDone },
+      enabledPids,
+    ),
+    [focusPids, enabledPids, supportedMode01Pids, mode01DiscoveryDone],
   );
 
   // Empty selection falls back to the normal dashboard — never a blank screen
@@ -663,9 +664,10 @@ At the top of the `activeTab === 'gauges'` block, above the existing info text:
             <Text style={styles.sectionHeader}>FOCUS GAUGES</Text>
             <Text style={styles.infoText}>
               Pick up to {MAX_FOCUS_GAUGES} gauges to show full-screen. Tap the
-              focus button on the dashboard to switch.
+              focus button on the dashboard to switch. Only gauges enabled below
+              can be focused — the app has to be reading a gauge to display it.
             </Text>
-            {getSortedPids().map((pid) => {
+            {getSortedPids().filter((p) => enabledSet.has(p.id)).map((pid) => {
               const on = settings.focusPids.includes(pid.id);
               const capped = !on && settings.focusPids.length >= MAX_FOCUS_GAUGES;
               return (
@@ -690,6 +692,8 @@ At the top of the `activeTab === 'gauges'` block, above the existing info text:
 ```
 
 Add `getSortedPids` to the existing `pidRegistry` import.
+
+**Deliberate behavior:** disabling a gauge does *not* remove it from `focusPids`. The picker stops showing it and `resolveFocusGauges` drops it at render, so it is inert and safe — but re-enabling the gauge later restores it as a focus pick. Remembering the choice is friendlier than silently discarding it, and the safety comes from the resolver, not from cleaning the stored list.
 
 **Step 3: Verify**
 

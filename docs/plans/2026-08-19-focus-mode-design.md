@@ -16,7 +16,7 @@ Focus mode is a **display mode, not a reconfiguration.** The normal dashboard is
 | Nature of the feature | A toggleable mode | User wants to "go back to default when needed" — not a permanent layout change |
 | Max focus gauges | 3 | Beyond 3 the cards stop being dramatically larger, defeating the point |
 | Selection vs activation | Selection in Settings, activation on dashboard | Choosing is a parked decision; toggling happens at 65 mph and must be one tap |
-| `focusPids` vs `enabledPids` | Independent lists | Coupling means entering focus silently rewrites the normal dashboard — a settings screen that edits itself is untrustworthy |
+| `focusPids` vs `enabledPids` | `focusPids` is a **subset** of `enabledPids` | See "Correction" below. Entering focus must not rewrite the normal dashboard — but focus also cannot show a gauge the app is not polling |
 | `focusActive` persistence | Persisted | Someone who drives in focus mode wants it every drive; exiting is one tap |
 | Critical alert in focus mode | Banner only, layout never changes | Gauge positions stay memorable; the driver's deliberate choice isn't overridden. `AlertBanner` already carries the parameter and value (`COOLANT CRITICAL: 255°F`) |
 | Chrome retained | None but exit + alert banner | Maximum gauge size was the explicit goal |
@@ -28,6 +28,16 @@ Rejected alternatives:
 - **Everything in Settings.** Consistent with existing preferences, but a 4-tap menu round trip to change modes mid-drive.
 - **Auto-promote an alarming gauge into the focus view.** Rejected: the layout shifts under the driver's eyes at the worst moment, and gauge positions stop being memorable.
 - **Auto-exit focus on a critical alert.** Rejected: yanks away the large readout exactly when the driver may be watching one closely.
+
+## Correction — 2026-08-20, during implementation
+
+The original decision read *"`focusPids` independent of `enabledPids`."* Code review caught that this is unsafe as written.
+
+`obdService.ts:345` builds the poll schedule from enabled PIDs only, so **a disabled PID is never polled**, and `SettingsScreen.tsx:58` `togglePid` rewrites `enabledPids` without clearing the store. Focusing a disabled gauge therefore renders either a permanent `--` or a **frozen last-known reading at 2.4× size** — violating the standing rule that a stale number on a temperature gauge is worse than no number.
+
+The intent behind "independent" was that entering focus mode must not silently rewrite the normal dashboard. That still holds. What does not hold is showing a gauge the app isn't reading.
+
+**Corrected rule:** `focusPids` is a subset of `enabledPids`. `resolveFocusGauges` drops anything not enabled, and the Settings picker offers only enabled gauges. To focus a gauge you must first enable it — a real constraint of the polling architecture, not a UX preference.
 
 ## Architecture
 
