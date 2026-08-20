@@ -40,18 +40,24 @@ export function FocusView({ gauges, units, onExit, onNavigate }: FocusViewProps)
         even when nothing is showing; do NOT collapse it to save pixels.
       */}
       <View style={styles.headerSlot}>
-        {/* Adapter dropped — the only signal, since the BLE pill is hidden here */}
-        {!bleConnected && (
+        {!bleConnected ? (
+          /*
+            Adapter dropped — the only signal, since the BLE pill is hidden
+            here. Deliberately REPLACES the alert banner rather than stacking
+            above it: with no adapter every gauge value is stale, so an alert
+            computed from those values may be minutes old. "no live data" is
+            the more actionable message, and one child always fits the slot.
+          */
           <View style={styles.disconnectStrip}>
             <Text style={styles.disconnectText}>ADAPTER DISCONNECTED</Text>
           </View>
+        ) : (
+          <AlertBanner
+            message={alertMessage}
+            priority={alertPriority}
+            onPress={() => onNavigate?.('alerts')}
+          />
         )}
-
-        <AlertBanner
-          message={alertMessage}
-          priority={alertPriority}
-          onPress={() => onNavigate?.('alerts')}
-        />
       </View>
 
       <View style={styles.gauges}>
@@ -95,6 +101,8 @@ const styles = StyleSheet.create({
    * here rather than pushing into the gauge stack. Gauges never resize.
    */
   headerSlot: {
+    // 52 = AlertBanner's borderWidth 2*2 + paddingVertical 12*2 + one 20pt
+    // line box (~24). Exactly one child ever renders, so nothing clips.
     height: 52,
     overflow: 'hidden',
   },
