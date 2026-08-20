@@ -15,6 +15,8 @@ import { getSortedPids, isFuelTrimSupported } from '../config/pidRegistry';
 import { forceEndTrip } from '../services/tripManager';
 import { IMPERIAL_UNITS, type Units } from '../utils/units';
 import { formatGaugeValue } from '../utils/gaugeFormat';
+import { resolveFocusGauges } from '../utils/focusLayout';
+import { FocusView } from '../components/FocusView';
 
 function cardinal(deg: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -36,6 +38,9 @@ interface DashboardScreenProps {
   useLiveGPS?: boolean;
   enabledPids?: string[];
   units?: Units;
+  focusPids?: string[];
+  focusActive?: boolean;
+  onSetFocusActive?: (active: boolean) => void;
 }
 
 export function DashboardScreen({
@@ -43,6 +48,9 @@ export function DashboardScreen({
   useLiveGPS = false,
   enabledPids = [],
   units = IMPERIAL_UNITS,
+  focusPids = [],
+  focusActive = false,
+  onSetFocusActive,
 }: DashboardScreenProps) {
   useKeepAwake();
   useGPS(useLiveGPS);
@@ -64,6 +72,27 @@ export function DashboardScreen({
     const timer = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const focusGauges = React.useMemo(
+    () => resolveFocusGauges(
+      focusPids,
+      { supported: supportedMode01Pids, done: mode01DiscoveryDone },
+      enabledPids,
+    ),
+    [focusPids, enabledPids, supportedMode01Pids, mode01DiscoveryDone],
+  );
+
+  // Empty selection falls back to the normal dashboard — never a blank screen
+  if (focusActive && focusGauges.length > 0) {
+    return (
+      <FocusView
+        gauges={focusGauges}
+        units={units}
+        onExit={() => onSetFocusActive?.(false)}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   const headingStr =
     headingDeg !== null
@@ -98,6 +127,11 @@ export function DashboardScreen({
         <Pressable onPress={() => onNavigate?.('ble')}>
           <StatusPill label="BLE" value={bleConnected ? 'ON' : '--'} />
         </Pressable>
+        {focusPids.length > 0 && (
+          <Pressable style={styles.iconBtn} onPress={() => onSetFocusActive?.(true)}>
+            <Text style={styles.iconBtnText}>{'◱'}</Text>
+          </Pressable>
+        )}
         <Pressable style={styles.iconBtn} onPress={() => onNavigate?.('settings')}>
           <Text style={styles.iconBtnText}>{'\u2699'}</Text>
         </Pressable>
