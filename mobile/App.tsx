@@ -8,7 +8,7 @@ import { BLEScreen } from './src/screens/BLEScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { AlertHistoryScreen } from './src/screens/AlertHistoryScreen';
 import { DebugLogScreen } from './src/screens/DebugLogScreen';
-import { loadSettings, type Settings, DEFAULT_SETTINGS } from './src/config/settings';
+import { loadSettings, saveSettings, type Settings, DEFAULT_SETTINGS } from './src/config/settings';
 import { loadDisclaimerStatus, saveDisclaimerAccepted } from './src/config/legalConfig';
 import { DisclaimerScreen } from './src/screens/DisclaimerScreen';
 import { setEnabledPids } from './src/services/obdService';
@@ -128,6 +128,14 @@ export default function App() {
     setScreen('dashboard');
   }, []);
 
+  const handleSetFocusActive = useCallback((active: boolean) => {
+    setSettings((prev) => {
+      const next = { ...prev, focusActive: active };
+      saveSettings(next);
+      return next;
+    });
+  }, []);
+
   const handleDisclaimerAccept = useCallback(async () => {
     await saveDisclaimerAccepted();
     setDisclaimerAccepted(true);
@@ -152,6 +160,9 @@ export default function App() {
               useLiveGPS={liveMode}
               enabledPids={settings.enabledPids}
               units={units}
+              focusPids={settings.focusPids}
+              focusActive={settings.focusActive}
+              onSetFocusActive={handleSetFocusActive}
             />
           )}
           {screen === 'trips' && (
