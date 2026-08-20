@@ -18,30 +18,60 @@ export interface Mode01Discovery {
 }
 
 /**
+ * Whether a gauge should render given Mode 01 discovery results.
+ *
+ * Only fuel-trim gauges are gated: the ECU enumerates which Mode 01 PIDs it
+ * answers, and a denied trim would sit at `--` forever. Everything else is
+ * always renderable. Before discovery finishes we assume supported, so gauges
+ * are not hidden during the first seconds of a connection.
+ *
+ * Shared with the dashboard so the two screens cannot drift apart.
+ */
+export function isFuelTrimSupported(
+  pid: PidDef,
+  discovery: Mode01Discovery,
+): boolean {
+  if (pid.gaugeMode !== 'fuel_trim') return true;
+  if (!discovery.done) return true;
+  return discovery.supported.has(pid.pid.toUpperCase());
+}
+
+/**
  * Map stored focus PID ids to registry definitions, dropping any that cannot
- * render. Preserves the user's chosen order.
+ * render. Preserves the user's chosen order and de-duplicates.
+ *
+ * A focused PID must also be enabled. Polling is driven off `enabledPids`, so
+ * a disabled gauge is never requested from the vehicle and the store keeps its
+ * last value — focusing one would blow up a stale reading to 2.4x, or show a
+ * permanent `--`. A stale number on a temperature gauge is worse than no
+ * number, so focus is restricted to the subset the app is actually polling.
  *
  * Deliberately does NOT enforce MAX_FOCUS_GAUGES: the cap is a UI affordance,
  * and a hand-edited 4th entry should degrade to smaller gauges rather than
  * throw. An empty result tells the caller to fall back to the normal
  * dashboard — never render a blank screen.
+ *
+ * Both id lists are array-guarded: settings are merged from disk without
+ * validation, and this screen's contract is that it cannot fail mid-render.
  */
 export function resolveFocusGauges(
   focusPids: string[],
   discovery: Mode01Discovery,
+  enabledPids: string[],
 ): PidDef[] {
+  if (!Array.isArray(focusPids) || !Array.isArray(enabledPids)) return [];
+
+  const enabled = new Set(enabledPids);
+  const seen = new Set<string>();
   const out: PidDef[] = [];
+
   for (const id of focusPids) {
+    if (seen.has(id)) continue; // duplicates collide on React keys
     const pid = getPidDef(id);
     if (!pid) continue; // stale id from a removed registry entry
-    // Same rule the dashboard applies: hide fuel trims the ECU denies.
-    if (
-      pid.gaugeMode === 'fuel_trim' &&
-      discovery.done &&
-      !discovery.supported.has(pid.pid.toUpperCase())
-    ) {
-      continue;
-    }
+    if (!enabled.has(pid.id)) continue; // not polled — would render stale
+    if (!isFuelTrimSupported(pid, discovery)) continue;
+    seen.add(id);
     out.push(pid);
   }
   return out;

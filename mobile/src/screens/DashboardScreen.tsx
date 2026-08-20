@@ -12,6 +12,7 @@ import { useMockData } from '../hooks/useMockData';
 import { useGPS } from '../hooks/useGPS';
 import { colors, fonts } from '../config/theme';
 import { getSortedPids, type PidDef } from '../config/pidRegistry';
+import { isFuelTrimSupported } from '../utils/focusLayout';
 import { forceEndTrip } from '../services/tripManager';
 import { IMPERIAL_UNITS, type Units } from '../utils/units';
 
@@ -105,7 +106,7 @@ export function DashboardScreen({
   const enabledGauges = getSortedPids().filter((pid) => {
     if (!enabledSet.has(pid.id)) return false;
     // Hide fuel-trim gauges for PIDs the ECU reported as unsupported after discovery
-    if (pid.gaugeMode === 'fuel_trim' && mode01DiscoveryDone && !supportedMode01Pids.has(pid.pid.toUpperCase())) return false;
+    if (!isFuelTrimSupported(pid, { supported: supportedMode01Pids, done: mode01DiscoveryDone })) return false;
     return true;
   });
 
