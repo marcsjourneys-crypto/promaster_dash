@@ -14,6 +14,8 @@ import {
   VOLT_HIGH,
 } from '../models/types';
 import { formatCodes } from '../data/dtcLookup';
+import type { TempUnit } from '../config/settings';
+import { makeUnits } from '../utils/units';
 
 export type AlertPriority = 'none' | 'warning' | 'critical';
 
@@ -68,6 +70,9 @@ export interface VehicleStore extends OBDData {
   // Night mode
   nightMode: boolean;
 
+  /** Temperature unit for alert text — display only, thresholds stay in °F. */
+  tempUnit: TempUnit;
+
   // Mode 01 PID discovery (for hiding unsupported gauge cards)
   supportedMode01Pids: Set<string>;
   mode01DiscoveryDone: boolean;
@@ -84,6 +89,7 @@ export interface VehicleStore extends OBDData {
   clearAlert: () => void;
   computeAlert: () => void;
   setSupportedMode01Pids: (pids: Set<string>) => void;
+  setTempUnit: (unit: TempUnit) => void;
 }
 
 export const useVehicleStore = create<VehicleStore>((set, get) => ({
@@ -124,6 +130,7 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   alertHistory: [],
   bleConnected: false,
   nightMode: false,
+  tempUnit: 'F',
   supportedMode01Pids: new Set<string>(),
   mode01DiscoveryDone: false,
 
@@ -174,6 +181,9 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   /** Recompute the current alert based on priority: DTC > critical temps > warnings > voltage. */
   computeAlert: () => {
     const s = get();
+    // Thresholds below stay in °F; only the message text is converted.
+    const u = makeUnits({ tempUnit: s.tempUnit, speedUnit: 'mph' });
+    const t = (f: number) => `${u.temp(f)}${u.tempLabel}`;
 
     const fireAlert = (message: string, priority: AlertPriority, severity: 'warning' | 'critical') => {
       // Push to history only when the message changes (avoid duplicate entries)
@@ -199,11 +209,11 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
 
     // Priority 2: Critical conditions
     if (s.transF !== null && s.transF >= TRANS_CRIT) {
-      fireAlert(`TRANS TEMP CRITICAL: ${s.transF.toFixed(0)}°F`, 'critical', 'critical');
+      fireAlert(`TRANS TEMP CRITICAL: ${t(s.transF)}`, 'critical', 'critical');
       return;
     }
     if (s.coolantF !== null && s.coolantF >= COOL_CRIT) {
-      fireAlert(`COOLANT CRITICAL: ${s.coolantF.toFixed(0)}°F`, 'critical', 'critical');
+      fireAlert(`COOLANT CRITICAL: ${t(s.coolantF)}`, 'critical', 'critical');
       return;
     }
     // Oil pressure critical — only when engine running (RPM > 800) to avoid idle false alarms
@@ -212,17 +222,17 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
       return;
     }
     if (s.oilTempF !== null && s.oilTempF >= 270) {
-      fireAlert(`OIL TEMP CRITICAL: ${s.oilTempF.toFixed(0)}°F`, 'critical', 'critical');
+      fireAlert(`OIL TEMP CRITICAL: ${t(s.oilTempF)}`, 'critical', 'critical');
       return;
     }
 
     // Priority 3: Warnings
     if (s.transF !== null && s.transF >= TRANS_WARN) {
-      fireAlert(`Trans temp warning: ${s.transF.toFixed(0)}°F`, 'warning', 'warning');
+      fireAlert(`Trans temp warning: ${t(s.transF)}`, 'warning', 'warning');
       return;
     }
     if (s.coolantF !== null && s.coolantF >= COOL_WARN) {
-      fireAlert(`Coolant warning: ${s.coolantF.toFixed(0)}°F`, 'warning', 'warning');
+      fireAlert(`Coolant warning: ${t(s.coolantF)}`, 'warning', 'warning');
       return;
     }
     if (s.oilPressurePsi !== null && s.rpm !== null && s.rpm > 800 && s.oilPressurePsi <= 20) {
@@ -230,15 +240,15 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
       return;
     }
     if (s.oilTempF !== null && s.oilTempF >= 250) {
-      fireAlert(`Oil temp warning: ${s.oilTempF.toFixed(0)}°F`, 'warning', 'warning');
+      fireAlert(`Oil temp warning: ${t(s.oilTempF)}`, 'warning', 'warning');
       return;
     }
     if (s.intakeAirF !== null && s.intakeAirF >= 180) {
-      fireAlert(`INTAKE AIR CRITICAL: ${s.intakeAirF.toFixed(0)}°F`, 'critical', 'critical');
+      fireAlert(`INTAKE AIR CRITICAL: ${t(s.intakeAirF)}`, 'critical', 'critical');
       return;
     }
     if (s.intakeAirF !== null && s.intakeAirF >= 160) {
-      fireAlert(`Intake air temp warning: ${s.intakeAirF.toFixed(0)}°F`, 'warning', 'warning');
+      fireAlert(`Intake air temp warning: ${t(s.intakeAirF)}`, 'warning', 'warning');
       return;
     }
 
@@ -257,4 +267,6 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   },
 
   setSupportedMode01Pids: (pids) => set({ supportedMode01Pids: pids, mode01DiscoveryDone: true }),
+
+  setTempUnit: (unit) => set({ tempUnit: unit }),
 }));

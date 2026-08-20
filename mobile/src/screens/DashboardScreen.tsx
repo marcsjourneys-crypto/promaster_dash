@@ -13,6 +13,7 @@ import { useGPS } from '../hooks/useGPS';
 import { colors, fonts } from '../config/theme';
 import { getSortedPids, type PidDef } from '../config/pidRegistry';
 import { forceEndTrip } from '../services/tripManager';
+import { IMPERIAL_UNITS, type Units } from '../utils/units';
 
 function cardinal(deg: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -29,8 +30,9 @@ function formatTripTime(startTs: number | null): string {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-/** Format a store value for display on a gauge card. */
-function formatGaugeValue(pid: PidDef, value: number | null): string {
+/** Format a store value for display on a gauge card, in the active units. */
+function formatGaugeValue(pid: PidDef, rawValue: number | null, units: Units): string {
+  const value = units.gaugeValue(pid.unit, rawValue);
   if (value === null) return '--';
   // Fuel trim: signed, 1 decimal
   if (pid.gaugeMode === 'fuel_trim') {
@@ -58,9 +60,15 @@ interface DashboardScreenProps {
   onNavigate?: (screen: string) => void;
   useLiveGPS?: boolean;
   enabledPids?: string[];
+  units?: Units;
 }
 
-export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = [] }: DashboardScreenProps) {
+export function DashboardScreen({
+  onNavigate,
+  useLiveGPS = false,
+  enabledPids = [],
+  units = IMPERIAL_UNITS,
+}: DashboardScreenProps) {
   useKeepAwake();
   useGPS(useLiveGPS);
   useMockData(!useLiveGPS);
@@ -86,7 +94,7 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
     headingDeg !== null
       ? `${cardinal(headingDeg)} ${headingDeg.toString().padStart(3, '0')}`
       : 'HDG --';
-  const elevStr = elevationFt !== null ? `${elevationFt}` : '--';
+  const elevStr = units.elevation(elevationFt);
   const gradeStr =
     gradePct !== null
       ? `${climbing ? '^' : gradePct < -0.5 ? 'v' : ''} ${gradePct > 0 ? '+' : ''}${gradePct.toFixed(1)}%`
@@ -110,7 +118,7 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
       </View>
 
       <View style={styles.statusBar}>
-        <StatusPill label="ELEV" value={`${elevStr} FT`} />
+        <StatusPill label="ELEV" value={`${elevStr} ${units.elevationLabel}`} />
         <StatusPill label="GRADE" value={gradeStr} />
         <Pressable onPress={() => onNavigate?.('ble')}>
           <StatusPill label="BLE" value={bleConnected ? 'ON' : '--'} />
@@ -127,7 +135,9 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
       {tripActive && (
         <View style={styles.tripBar}>
           <Text style={styles.tripLabel}>TRIP</Text>
-          <Text style={styles.tripStat}>{tripDistanceMi.toFixed(1)} mi</Text>
+          <Text style={styles.tripStat}>
+            {units.distance(tripDistanceMi)} {units.distanceLabel}
+          </Text>
           <Text style={styles.tripSep}>|</Text>
           <Text style={styles.tripStat}>{formatTripTime(tripStartTs)}</Text>
           <Pressable style={styles.tripEndBtn} onPress={() => forceEndTrip()}>
@@ -138,10 +148,8 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
 
       {/* ---- Speed hero ---- */}
       <View style={styles.speedHero}>
-        <Text style={styles.speedValue}>
-          {speedMph !== null ? speedMph.toFixed(0) : '--'}
-        </Text>
-        <Text style={styles.speedUnit}>MPH</Text>
+        <Text style={styles.speedValue}>{units.speed(speedMph)}</Text>
+        <Text style={styles.speedUnit}>{units.speedLabel}</Text>
         <View style={styles.rpmChip}>
           <Text style={styles.rpmLabel}>RPM</Text>
           <Text style={styles.rpmValue}>{rpm !== null ? rpm.toString() : '--'}</Text>
@@ -161,14 +169,14 @@ export function DashboardScreen({ onNavigate, useLiveGPS = false, enabledPids = 
             <View key={pid.id} style={fullWidth ? styles.gaugeCardFull : styles.gaugeCardHalf}>
               <GaugeCard
                 title={pid.label}
-                value={formatGaugeValue(pid, rawValue)}
-                unit={pid.unit}
-                rawValue={rawValue}
-                min={pid.range[0]}
-                max={pid.range[1]}
+                value={formatGaugeValue(pid, rawValue, units)}
+                unit={units.gaugeUnit(pid.unit)}
+                rawValue={units.gaugeValue(pid.unit, rawValue)}
+                min={units.gaugeValue(pid.unit, pid.range[0])!}
+                max={units.gaugeValue(pid.unit, pid.range[1])!}
                 mode={pid.gaugeMode}
-                warn={pid.warn}
-                crit={pid.crit}
+                warn={units.gaugeValue(pid.unit, pid.warn)}
+                crit={units.gaugeValue(pid.unit, pid.crit)}
               />
             </View>
           );

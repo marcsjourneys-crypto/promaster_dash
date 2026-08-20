@@ -17,8 +17,11 @@ import { exportAndShare } from '../services/gpxExport';
 import { TripChart } from '../components/TripChart';
 import { TripMapSection } from '../components/TripMap';
 
+import { IMPERIAL_UNITS, type Units } from '../utils/units';
+
 interface TripsScreenProps {
   onBack: () => void;
+  units?: Units;
 }
 
 function formatDate(ts: number): string {
@@ -48,6 +51,7 @@ function TripItem({
   onDelete,
   onExport,
   onRename,
+  units,
 }: {
   trip: TripRow;
   expanded: boolean;
@@ -55,6 +59,7 @@ function TripItem({
   onDelete: (id: number) => void;
   onExport: (trip: TripRow) => void;
   onRename: (trip: TripRow) => void;
+  units: Units;
 }) {
   return (
     <View style={styles.tripCard}>
@@ -71,7 +76,9 @@ function TripItem({
           )}
         </Pressable>
         <View style={styles.tripHeaderRight}>
-          <Text style={styles.tripDistance}>{trip.distanceMi.toFixed(1)} mi</Text>
+          <Text style={styles.tripDistance}>
+            {units.distance(trip.distanceMi)} {units.distanceLabel}
+          </Text>
           <Text style={styles.chevron}>{expanded ? '▲' : '▼'}</Text>
         </View>
       </View>
@@ -86,7 +93,9 @@ function TripItem({
           <View style={styles.stat}>
             <Text style={styles.statLabel}>Avg Speed</Text>
             <Text style={styles.statValue}>
-              {trip.avgSpeedMph > 0 ? `${trip.avgSpeedMph.toFixed(0)} mph` : '--'}
+              {trip.avgSpeedMph > 0
+                ? `${units.speed(trip.avgSpeedMph)} ${units.speedLabel.toLowerCase()}`
+                : '--'}
             </Text>
           </View>
           <View style={styles.stat}>
@@ -97,13 +106,13 @@ function TripItem({
                 trip.maxTransF !== null && trip.maxTransF >= 230 && styles.statWarn,
               ]}
             >
-              {trip.maxTransF !== null ? `${trip.maxTransF.toFixed(0)}°F` : '--'}
+              {trip.maxTransF !== null ? `${units.temp(trip.maxTransF)}${units.tempLabel}` : '--'}
             </Text>
           </View>
           <View style={styles.stat}>
             <Text style={styles.statLabel}>Max Cool</Text>
             <Text style={styles.statValue}>
-              {trip.maxCoolantF !== null ? `${trip.maxCoolantF.toFixed(0)}°F` : '--'}
+              {trip.maxCoolantF !== null ? `${units.temp(trip.maxCoolantF)}${units.tempLabel}` : '--'}
             </Text>
           </View>
         </View>
@@ -141,7 +150,7 @@ function TripItem({
   );
 }
 
-export function TripsScreen({ onBack }: TripsScreenProps) {
+export function TripsScreen({ onBack, units = IMPERIAL_UNITS }: TripsScreenProps) {
   const [trips, setTrips] = useState<TripRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -218,7 +227,7 @@ export function TripsScreen({ onBack }: TripsScreenProps) {
       {totalTrips > 0 && (
         <View style={styles.summary}>
           <Text style={styles.summaryText}>
-            {totalTrips} trips · {totalMiles.toFixed(1)} miles
+            {totalTrips} trips · {units.distance(totalMiles)} {units.distanceLabel}
           </Text>
         </View>
       )}
@@ -239,6 +248,7 @@ export function TripsScreen({ onBack }: TripsScreenProps) {
             onDelete={handleDelete}
             onExport={handleExport}
             onRename={handleRename}
+            units={units}
           />
         )}
         ListEmptyComponent={

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AppSplash } from './src/screens/AppSplash';
@@ -17,6 +17,8 @@ import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
 import { CodesScreen } from './src/screens/CodesScreen';
 import { initDatabase, seedDemoTrips, seedDemoMaintenance, clearDemoData } from './src/services/loggingService';
 import { restoreTrip, tickWatchdog } from './src/services/tripManager';
+import { makeUnits } from './src/utils/units';
+import { useVehicleStore } from './src/store/vehicleStore';
 
 type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance' | 'codes';
 
@@ -100,6 +102,17 @@ export default function App() {
     }
   }, [liveMode, dbReady]);
 
+  // Display units — derived from settings, applied at render time only
+  const units = useMemo(
+    () => makeUnits({ tempUnit: settings.tempUnit, speedUnit: settings.speedUnit }),
+    [settings.tempUnit, settings.speedUnit],
+  );
+
+  // Alert messages are built inside the store, so it needs the temperature unit
+  useEffect(() => {
+    useVehicleStore.getState().setTempUnit(settings.tempUnit);
+  }, [settings.tempUnit]);
+
   const handleNavigate = useCallback((s: string) => {
     // Map any route to valid screens
     if (s === 'scan') s = 'codes'; // SCAN CODES → diagnostic codes screen
@@ -138,10 +151,11 @@ export default function App() {
               onNavigate={handleNavigate}
               useLiveGPS={liveMode}
               enabledPids={settings.enabledPids}
+              units={units}
             />
           )}
           {screen === 'trips' && (
-            <TripsScreen onBack={() => setScreen('dashboard')} />
+            <TripsScreen onBack={() => setScreen('dashboard')} units={units} />
           )}
           {screen === 'ble' && (
             <BLEScreen onBack={() => setScreen('dashboard')} />
