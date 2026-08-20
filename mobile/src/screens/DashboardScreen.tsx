@@ -11,9 +11,10 @@ import { StatusPill } from '../components/StatusPill';
 import { useMockData } from '../hooks/useMockData';
 import { useGPS } from '../hooks/useGPS';
 import { colors, fonts } from '../config/theme';
-import { getSortedPids, isFuelTrimSupported, type PidDef } from '../config/pidRegistry';
+import { getSortedPids, isFuelTrimSupported } from '../config/pidRegistry';
 import { forceEndTrip } from '../services/tripManager';
 import { IMPERIAL_UNITS, type Units } from '../utils/units';
+import { formatGaugeValue } from '../utils/gaugeFormat';
 
 function cardinal(deg: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -28,32 +29,6 @@ function formatTripTime(startTs: number | null): string {
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
-/** Format a store value for display on a gauge card, in the active units. */
-function formatGaugeValue(pid: PidDef, rawValue: number | null, units: Units): string {
-  const value = units.gaugeValue(pid.unit, rawValue);
-  if (value === null) return '--';
-  // Fuel trim: signed, 1 decimal
-  if (pid.gaugeMode === 'fuel_trim') {
-    return (value > 0 ? '+' : '') + value.toFixed(1);
-  }
-  // Temperatures and pressures: no decimals
-  if (pid.gaugeMode === 'temp' || pid.gaugeMode === 'pressure_low') {
-    return value.toFixed(0);
-  }
-  // Voltage: 1 decimal
-  if (pid.gaugeMode === 'volt') {
-    return value.toFixed(1);
-  }
-  // Percentages: 1 decimal
-  if (pid.gaugeMode === 'percent') {
-    return value.toFixed(1);
-  }
-  // Info gauges: variable
-  if (pid.unit === 'g/s') return value.toFixed(1);
-  if (pid.unit === '\u00b0') return value.toFixed(1);
-  return value.toFixed(0);
 }
 
 interface DashboardScreenProps {
