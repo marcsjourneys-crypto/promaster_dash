@@ -119,6 +119,17 @@ export function DashboardScreen({
       <View style={styles.statusBar}>
         <StatusPill label="TRIP" value={tripActive ? formatTripTime(tripStartTs) : '--:--:--'} />
         <StatusPill label="" value={headingStr} large />
+        {/*
+          Focus toggle lives here, not on the second bar: that row already
+          carries ELEV + GRADE + BLE + the settings gear, and statusBar is a
+          non-wrapping row whose children do not shrink — a fifth child pushes
+          the gear (the only route to Settings) off the right edge.
+        */}
+        {focusGauges.length > 0 && (
+          <Pressable style={styles.iconBtn} onPress={() => onSetFocusActive?.(true)}>
+            <Text style={styles.iconBtnText}>{'◱'}</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.statusBar}>
@@ -127,11 +138,6 @@ export function DashboardScreen({
         <Pressable onPress={() => onNavigate?.('ble')}>
           <StatusPill label="BLE" value={bleConnected ? 'ON' : '--'} />
         </Pressable>
-        {focusGauges.length > 0 && (
-          <Pressable style={styles.iconBtn} onPress={() => onSetFocusActive?.(true)}>
-            <Text style={styles.iconBtnText}>{'◱'}</Text>
-          </Pressable>
-        )}
         <Pressable style={styles.iconBtn} onPress={() => onNavigate?.('settings')}>
           <Text style={styles.iconBtnText}>{'\u2699'}</Text>
         </Pressable>
