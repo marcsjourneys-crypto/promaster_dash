@@ -127,7 +127,7 @@ export function DashboardScreen({
         <Pressable onPress={() => onNavigate?.('ble')}>
           <StatusPill label="BLE" value={bleConnected ? 'ON' : '--'} />
         </Pressable>
-        {focusPids.length > 0 && (
+        {focusGauges.length > 0 && (
           <Pressable style={styles.iconBtn} onPress={() => onSetFocusActive?.(true)}>
             <Text style={styles.iconBtnText}>{'◱'}</Text>
           </Pressable>
