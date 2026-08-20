@@ -81,6 +81,12 @@ describe('resolveFocusGauges', () => {
     const bad = undefined as unknown as string[];
     expect(resolveFocusGauges(['transF'], NO_DISCOVERY, bad)).toEqual([]);
   });
+
+  // The cap is baked into user-visible copy on the settings screen ("Pick up
+  // to 3 gauges"), so pin the value, not just the type.
+  it('caps the settings-screen selection at 3', () => {
+    expect(MAX_FOCUS_GAUGES).toBe(3);
+  });
 });
 
 describe('isFuelTrimSupported', () => {
@@ -100,8 +106,4 @@ describe('isFuelTrimSupported', () => {
     const done = { supported: new Set(['06']), done: true };
     expect(isFuelTrimSupported(ltft, done)).toBe(false);
   });
-});
-
-it('still exports the UI cap for the settings screen', () => {
-  expect(typeof MAX_FOCUS_GAUGES).toBe('number');
 });

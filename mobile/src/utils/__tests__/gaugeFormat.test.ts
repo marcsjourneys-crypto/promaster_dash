@@ -8,6 +8,8 @@ const MET = makeUnits({ tempUnit: 'C', speedUnit: 'kph' });
 const trans = getPidDef('transF')!;
 const volt = getPidDef('voltageV')!;
 const stft = getPidDef('stftBank1Pct')!;
+const load = getPidDef('engineLoadPct')!;
+const oil = getPidDef('oilPressurePsi')!;
 
 it('renders the placeholder for missing data', () => {
   expect(formatGaugeValue(trans, null, IMP)).toBe('--');
@@ -30,12 +32,23 @@ it('signs fuel trim', () => {
   expect(formatGaugeValue(stft, -3.5, IMP)).toBe('-3.5');
 });
 
+// Oil pressure is the gauge focus mode was requested for.
+it('formats pressure_low with no decimals', () => {
+  expect(formatGaugeValue(oil, 41.6, IMP)).toBe('42');
+});
+
+it('leaves PSI alone in metric — only temperatures convert', () => {
+  expect(formatGaugeValue(oil, 41.6, MET)).toBe('42');
+});
+
+it('formats percentages with one decimal', () => {
+  expect(formatGaugeValue(load, 37.26, IMP)).toBe('37.3');
+});
+
 // ---- gaugeCardProps ----
 //
 // warn/crit MUST convert in lockstep with value/min/max. If they ever diverge,
 // a critical oil pressure or trans temp renders as healthy.
-
-const oil = getPidDef('oilPressurePsi')!;
 
 describe('gaugeCardProps', () => {
   it('converts warn and crit alongside min and max for a temperature gauge', () => {
