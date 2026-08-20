@@ -21,12 +21,16 @@ import { CANDIDATES_948, decode948, type Candidate948 } from './provider948TE';
 import { useVehicleStore } from '../store/vehicleStore';
 import { dlog } from './debugLog';
 
-/** Flip to true to enable the 948TE PROBE button on the BLE screen.
+/** Shows the 948TE PROBE button on the BLE screen.
  *  RETIRED 2026-08-02 (build 13): the sweeps found the PID — TCM 0x18 DID
  *  04FE, promoted in provider948TE.ts and confirmed against coolant on a
  *  real drive. The button's only remaining effect was blanking the gauges
- *  for ~13 min when pressed mid-drive. Re-enable only if a future model
- *  year needs a fresh hunt. */
+ *  for ~13 min when pressed mid-drive.
+ *
+ *  Deliberately hard-off rather than tied to DIAGNOSTICS_ENABLED — a
+ *  diagnostic build should not resurrect a 13-minute gauge blackout that has
+ *  nothing left to find. If a future model year needs a fresh hunt, change
+ *  this to `DIAGNOSTICS_ENABLED` (imported from ../config/diagnostics). */
 export const TRANS_PROBE_MODE = false;
 
 interface ProbeResult {

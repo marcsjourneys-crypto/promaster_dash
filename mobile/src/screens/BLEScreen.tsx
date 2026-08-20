@@ -32,6 +32,7 @@ import { provider62TE, getLast62ScanResult } from '../services/provider62TE';
 import { TRANS_PROBE_MODE, run948ProbeSweep } from '../services/trans948Probe';
 // TEMPORARY DIAGNOSTIC (body-module address sweep) — see bodySweep.ts to remove
 import { BODY_SWEEP_MODE, runBodySweep } from '../services/bodySweep';
+import { DIAGNOSTICS_ENABLED } from '../config/diagnostics';
 
 import { dlog } from '../services/debugLog';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -262,6 +263,12 @@ export function BLEScreen({ onBack }: BLEScreenProps) {
           <Text style={styles.backBtnText}>← Back</Text>
         </Pressable>
         <Text style={styles.title}>OBD2 CONNECTION</Text>
+        {/* Marks a diagnostics build (npm run ios:diag) — absent in tester builds */}
+        {DIAGNOSTICS_ENABLED && (
+          <View style={styles.diagBadge}>
+            <Text style={styles.diagBadgeText}>DIAG</Text>
+          </View>
+        )}
       </View>
 
       {/* Transport — BLE only in this build */}
@@ -452,6 +459,20 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: fonts.sizeSm,
     fontWeight: '800',
+  },
+  diagBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.amber,
+  },
+  diagBadgeText: {
+    color: colors.amber,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   title: {
     color: colors.textPrimary,

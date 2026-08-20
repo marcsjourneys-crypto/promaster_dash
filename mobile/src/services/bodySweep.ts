@@ -24,6 +24,7 @@
 // BODY_SWEEP_MODE block in BLEScreen.tsx. Modelled on trans948Probe.ts.
 // =============================================================================
 
+import { DIAGNOSTICS_ENABLED } from '../config/diagnostics';
 import { sendCommand, sendAtsh } from './obdTransport';
 import { getBroadcastHeader, initializeAdapter } from './obdService';
 import { dlog } from './debugLog';
@@ -50,10 +51,10 @@ import {
   payloadsEqual,
 } from './bodySweepCore';
 
-/** Flip to true to enable the BODY SWEEP button on the BLE screen.
- *  ENABLED for the v2.5.0 build 1 TestFlight build — TPMS discovery in the van.
- *  Set back to false before any App Store submission. */
-export const BODY_SWEEP_MODE = true;
+/** Shows the BODY SWEEP button on the BLE screen. Tied to the diagnostics
+ *  build switch, so it is on only for `npm run ios:diag` cable builds and off
+ *  in anything handed to a tester. No longer needs flipping by hand. */
+export const BODY_SWEEP_MODE = DIAGNOSTICS_ENABLED;
 
 /** Per-command timeout during the fast address walk (ms). ATST19 keeps silent
  *  addresses failing quickly, so this only bounds the pathological case. */

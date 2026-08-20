@@ -10,7 +10,9 @@
     "prebuild:ios": "expo prebuild --platform ios",
     "prebuild:clean": "expo prebuild --clean --platform ios",
     "ios:device": "expo run:ios --device",
-    "ios:release": "expo run:ios --device --configuration Release"
+    "ios:release": "expo run:ios --device --configuration Release",
+    "ios:diag": "EXPO_PUBLIC_DIAGNOSTICS=1 expo run:ios --device --configuration Release",
+    "test": "jest"
   },
   "dependencies": {
     "@maplibre/maplibre-react-native": "^11.3.6",
