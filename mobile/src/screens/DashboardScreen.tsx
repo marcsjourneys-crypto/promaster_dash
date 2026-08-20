@@ -82,6 +82,20 @@ export function DashboardScreen({
     [focusPids, enabledPids, supportedMode01Pids, mode01DiscoveryDone],
   );
 
+  // focusActive is persisted, so a stale `true` survives restarts. If the last
+  // focusable gauge goes away (disabled in Settings, or denied by discovery),
+  // the render below falls back and the toggle hides — but the flag would stay
+  // set, and re-enabling that gauge weeks later would drop the driver straight
+  // into full-screen focus with no tap that asked for it. Clear it instead.
+  //
+  // Must stay above the early return: no hook in this component may be
+  // conditionally skipped.
+  React.useEffect(() => {
+    if (focusActive && focusGauges.length === 0) {
+      onSetFocusActive?.(false);
+    }
+  }, [focusActive, focusGauges.length, onSetFocusActive]);
+
   // Empty selection falls back to the normal dashboard — never a blank screen
   if (focusActive && focusGauges.length > 0) {
     return (
