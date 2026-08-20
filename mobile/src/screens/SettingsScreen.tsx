@@ -23,10 +23,12 @@ import {
 import { applyTransModeChange } from '../services/transPathResolver';
 import {
   getPidsByGroup,
+  getSortedPids,
   GROUP_LABELS,
   type PidGroup,
   type PidDef,
 } from '../config/pidRegistry';
+import { MAX_FOCUS_GAUGES } from '../utils/focusLayout';
 import { cleanupOldTrips } from '../services/loggingService';
 import { useVehicleStore } from '../store/vehicleStore';
 
@@ -62,6 +64,18 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
         ? current.filter((id) => id !== pidId)
         : [...current, pidId];
       return { ...prev, enabledPids: next };
+    });
+    setModified(true);
+  }, []);
+
+  const toggleFocusPid = useCallback((pidId: string) => {
+    setSettings((prev) => {
+      const current = prev.focusPids;
+      if (current.includes(pidId)) {
+        return { ...prev, focusPids: current.filter((id) => id !== pidId) };
+      }
+      if (current.length >= MAX_FOCUS_GAUGES) return prev; // cap
+      return { ...prev, focusPids: [...current, pidId] };
     });
     setModified(true);
   }, []);
@@ -135,6 +149,34 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {activeTab === 'gauges' && (
           <>
+            <Text style={styles.sectionHeader}>FOCUS GAUGES</Text>
+            <Text style={styles.infoText}>
+              Pick up to {MAX_FOCUS_GAUGES} gauges to show full-screen. Tap the
+              focus button on the dashboard to switch. Only gauges enabled below
+              can be focused — the app has to be reading a gauge to display it.
+            </Text>
+            {getSortedPids().filter((p) => enabledSet.has(p.id)).map((pid) => {
+              const on = settings.focusPids.includes(pid.id);
+              const capped = !on && settings.focusPids.length >= MAX_FOCUS_GAUGES;
+              return (
+                <View key={`focus-${pid.id}`} style={styles.switchRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.switchLabel}>{pid.label}</Text>
+                    <Text style={styles.switchHint}>
+                      {capped ? `Limit of ${MAX_FOCUS_GAUGES} reached` : pid.unit}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={on}
+                    disabled={capped}
+                    onValueChange={() => toggleFocusPid(pid.id)}
+                    trackColor={{ false: 'rgba(60, 55, 45, 1)', true: 'rgba(180, 130, 50, 0.6)' }}
+                    thumbColor={on ? colors.amber : 'rgba(150, 140, 120, 1)'}
+                  />
+                </View>
+              );
+            })}
+            <Text style={[styles.sectionHeader, { marginTop: 20 }]}>DASHBOARD GAUGES</Text>
             <Text style={styles.infoText}>
               Toggle which gauges appear on the dashboard. RPM and Speed are always shown.
             </Text>
