@@ -14,9 +14,11 @@ interface SegmentBarProps {
   mode: GaugeMode;
   warn: number | null;  // warn threshold (or null for info-only gauges)
   crit: number | null;  // crit threshold (or null for info-only gauges)
+  /** Display multiplier for focus mode. 1 = normal dashboard. */
+  scale?: number;
 }
 
-export function SegmentBar({ value, min, max, mode, warn, crit }: SegmentBarProps) {
+export function SegmentBar({ value, min, max, mode, warn, crit, scale = 1 }: SegmentBarProps) {
   // --- fuel_trim: bipolar center-zero rendering ---
   if (mode === 'fuel_trim') {
     const half = SEGMENT_COUNT / 2; // 7
@@ -41,14 +43,14 @@ export function SegmentBar({ value, min, max, mode, warn, crit }: SegmentBarProp
         : '';
 
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { height: 28 * scale }]}>
         <View style={styles.barRow}>
           {Array.from({ length: SEGMENT_COUNT }, (_, i) => (
             <View
               key={i}
               style={[
                 styles.segment,
-                { backgroundColor: fuelIsFilled(i) ? fuelSegColor(i) : colors.segEmpty },
+                { height: 18 * scale, backgroundColor: fuelIsFilled(i) ? fuelSegColor(i) : colors.segEmpty },
               ]}
             />
           ))}
@@ -99,14 +101,14 @@ export function SegmentBar({ value, min, max, mode, warn, crit }: SegmentBarProp
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { height: 28 * scale }]}>
       <View style={styles.barRow}>
         {Array.from({ length: SEGMENT_COUNT }, (_, i) => (
           <View
             key={i}
             style={[
               styles.segment,
-              { backgroundColor: i < filled ? segColor(i) : colors.segEmpty },
+              { height: 18 * scale, backgroundColor: i < filled ? segColor(i) : colors.segEmpty },
             ]}
           />
         ))}

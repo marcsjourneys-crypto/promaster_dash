@@ -17,6 +17,8 @@ interface GaugeCardProps {
   mode: GaugeMode;
   warn: number | null;
   crit: number | null;
+  /** Display multiplier for focus mode. 1 = normal dashboard. */
+  scale?: number;
 }
 
 export function GaugeCard({
@@ -29,14 +31,15 @@ export function GaugeCard({
   mode,
   warn,
   crit,
+  scale = 1,
 }: GaugeCardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.inner}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, { fontSize: fonts.sizeMd * scale }]}>{title}</Text>
         <View style={styles.valueRow}>
-          <Text style={styles.value}>{value}</Text>
-          <Text style={styles.unit}>{unit}</Text>
+          <Text style={[styles.value, { fontSize: fonts.size2xl * scale }]}>{value}</Text>
+          <Text style={[styles.unit, { fontSize: fonts.sizeLg * scale }]}>{unit}</Text>
         </View>
         <View style={styles.barContainer}>
           <SegmentBar
@@ -46,6 +49,7 @@ export function GaugeCard({
             mode={mode}
             warn={warn}
             crit={crit}
+            scale={scale}
           />
         </View>
       </View>
