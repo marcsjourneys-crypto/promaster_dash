@@ -1,0 +1,529 @@
+10:26:30 OBD: Trans raw: "62B01023EE"
+
+10:26:30 OBD: Trans bytes=[0x23 0xEE]
+
+10:26:30 OBD: Trans = 143.7°F
+
+10:26:30 OBD: Voltage raw: "14.2V"
+
+10:26:30 OBD: Voltage = 14.2V
+
+10:26:31 OBD: Coolant raw: "41058C"
+
+10:26:31 OBD: Coolant bytes[0]=0x8C → 212.0°F
+
+10:26:31 OBD: WARNING — coolant raw unchanged for 7 polls (possible adapter cache)
+
+10:26:31 OBD: stftBank1Pct bytes=[0x82] → 1.6
+
+10:26:31 GPS: useGPS pipeline starting (dashboard mounted)
+
+10:26:31 GPS: startLocationUpdates() called
+
+10:26:31 GPS: permissions ok (foreground=granted, background=granted)
+
+10:26:31 GPS: watcher started OK
+
+10:26:31 GPS: fix #1 speed=0.0m/s alt=114m acc=5m
+
+10:26:31 GPS: fix #2 speed=-1.0m/s alt=111m acc=18m
+
+10:26:32 OBD: Trans raw: "62B01023EE"
+
+10:26:32 OBD: Trans bytes=[0x23 0xEE]
+
+10:26:32 OBD: Trans = 143.7°F
+
+10:26:32 OBD: stftBank2Pct bytes=[0x7D] → -2.3
+
+10:26:32 OBD: Coolant raw: "41058C"
+
+10:26:32 OBD: Coolant bytes[0]=0x8C → 212.0°F
+
+10:26:32 OBD: WARNING — coolant raw unchanged for 8 polls (possible adapter cache)
+
+10:26:33 GPS: stopLocationUpdates() called (watcher was live, 2 fixes delivered)
+
+10:26:33 OBD: Voltage raw: "14.1V"
+
+10:26:33 OBD: Voltage = 14.1V
+
+10:26:34 OBD: DTC raw: "4300"
+
+10:26:34 OBD: Trans raw: "62B01023EE"
+
+10:26:34 OBD: Trans bytes=[0x23 0xEE]
+
+10:26:34 OBD: Trans = 143.7°F
+
+10:26:34 OBD: ltftBank1Pct bytes=[0x7B] → -3.9
+
+10:26:34 OBD: Coolant raw: "41058C"
+
+10:26:34 OBD: Coolant bytes[0]=0x8C → 212.0°F
+
+10:26:34 OBD: WARNING — coolant raw unchanged for 9 polls (possible adapter cache)
+
+10:26:34 OBD: stftBank1Pct bytes=[0x81] → 0.8
+
+10:26:35 OBD: ltftBank2Pct bytes=[0x7D] → -2.3
+
+10:26:35 OBD: stftBank2Pct bytes=[0x7F] → -0.8
+
+10:26:36 OBD: Trans raw: "62B01023EE"
+
+10:26:36 OBD: Trans bytes=[0x23 0xEE]
+
+10:26:36 OBD: Trans = 143.7°F
+
+10:26:36 OBD: Coolant raw: "41058C"
+
+10:26:36 OBD: Coolant bytes[0]=0x8C → 212.0°F
+
+10:26:36 OBD: WARNING — coolant raw unchanged for 10 polls (possible adapter cache)
+
+10:26:36 OBD: Voltage raw: "14.2V"
+
+10:26:36 OBD: Voltage = 14.2V
+
+10:26:37 OBD: Trans raw: "62B01023EE"
+
+10:26:37 OBD: Trans bytes=[0x23 0xEE]
+
+10:26:37 OBD: Trans = 143.7°F
+
+10:26:38 OBD: stftBank1Pct bytes=[0x81] → 0.8
+
+10:26:38 OBD: Coolant raw: "41058C"
+
+10:26:38 OBD: Coolant bytes[0]=0x8C → 212.0°F
+
+10:26:38 OBD: WARNING — coolant raw unchanged for 11 polls (possible adapter cache)
+
+10:26:38 OBD: stftBank2Pct bytes=[0x7B] → -3.9
+
+10:26:39 OBD: Trans raw: "62B01023EE"
+
+10:26:39 OBD: Trans bytes=[0x23 0xEE]
+
+10:26:39 OBD: Trans = 143.7°F
+
+10:26:40 [BODY-SWEEP] ================ BODY SWEEP START ================
+
+10:26:40 [BODY-SWEEP] Targets: 256 address(es) as 18DAF1. Known-live from prior census: [10, 18, 1F, 40, 60, C6, C7, CB]
+
+10:26:40 [BODY-SWEEP] A responder is any address whose 3E00 draws a positive, an NRC, or a bus error — i.e. something is there. Silence = not reachable at the port.
+
+10:26:40 [BODY-SWEEP] ---- Phase 1: address sweep (3E00 to 18DAF1) ----
+
+10:26:43 GPS: useGPS pipeline starting (dashboard mounted)
+
+10:26:43 GPS: startLocationUpdates() called
+
+10:26:43 GPS: permissions ok (foreground=granted, background=granted)
+
+10:26:43 GPS: watcher started OK
+
+10:26:43 GPS: fix #1 speed=-1.0m/s alt=111m acc=18m
+
+10:26:43 GPS: fix #2 speed=-1.0m/s alt=116m acc=25m
+
+10:26:43 GPS: fix #3 speed=-1.0m/s alt=116m acc=20m
+
+10:26:45 GPS: stopLocationUpdates() called (watcher was live, 4 fixes delivered)
+
+10:26:45 [BODY-SWEEP] 0x10 RESPONDER [nrc] ← 3E00 "7F3E12" [NRC 12: subFunctionNotSupported]
+
+10:26:50 [BODY-SWEEP] ...scanned 32/256 (0x1F), 1 responder(s) so far
+
+10:26:53 [BODY-SWEEP] 0x28 RESPONDER [positive] ← 3E00 "7E00" <<< NEW (not in prior census)
+
+10:27:00 [BODY-SWEEP] ...scanned 64/256 (0x3F), 2 responder(s) so far
+
+10:27:00 [BODY-SWEEP] 0x40 RESPONDER [positive] ← 3E00 "7E00"
+
+10:27:11 [BODY-SWEEP] ...scanned 96/256 (0x5F), 3 responder(s) so far
+
+10:27:21 [BODY-SWEEP] ...scanned 128/256 (0x7F), 3 responder(s) so far
+
+10:27:31 [BODY-SWEEP] ...scanned 160/256 (0x9F), 3 responder(s) so far
+
+10:27:42 [BODY-SWEEP] ...scanned 192/256 (0xBF), 3 responder(s) so far
+
+10:27:53 [BODY-SWEEP] ...scanned 224/256 (0xDF), 3 responder(s) so far
+
+10:28:06 [BODY-SWEEP] ...scanned 256/256 (0xFF), 3 responder(s) so far
+
+10:28:06 [BODY-SWEEP] ADDRESS SWEEP RESPONDERS: [0x10, 0x28, 0x40]
+
+10:28:06 [BODY-SWEEP] ---- Phase 2: fingerprint responders (ISO identification DIDs) ----
+
+10:28:06 [BODY-SWEEP] -- fingerprint 0x10 --
+
+10:28:06 [BODY-SWEEP] FP 0x10 → 22F190 (VIN) ← RAW "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" [bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] ascii="3C6TRVDG1EE116790" <<< SANE VIN — real module]
+
+10:28:06 [BODY-SWEEP] FP 0x10 → 22F18C (ECU serial) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:28:06 [BODY-SWEEP] FP 0x10 → 22F195 (ECU software version) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:28:06 [BODY-SWEEP] FP 0x10 → 22F18A (system supplier id) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:28:06 [BODY-SWEEP] FP 0x10 → 22F18B (ECU manufacturing date) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:28:06 [BODY-SWEEP] -- fingerprint 0x28 --
+
+10:28:07 [BODY-SWEEP] FP 0x28 → 22F190 (VIN) ← RAW "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" [bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] ascii="3C6TRVDG1EE116790" <<< SANE VIN — real module]
+
+10:28:07 [BODY-SWEEP] FP 0x28 → 22F18C (ECU serial) ← RAW "012\r0:62F18C543030\r1:34463232383330\r2:3836393420" [bytes=[0x54 0x30 0x30 0x34 0x46 0x32 0x32 0x38 0x33 0x30 0x38 0x36 0x39 0x34 0x20] ascii="T004F228308694 "]
+
+10:28:07 [BODY-SWEEP] FP 0x28 → 22F195 (ECU software version) ← RAW "62F1950207" [bytes=[0x02 0x07] ascii=".."]
+
+10:28:07 [BODY-SWEEP] FP 0x28 → 22F18A (system supplier id) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:28:07 [BODY-SWEEP] FP 0x28 → 22F18B (ECU manufacturing date) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:28:07 [BODY-SWEEP] -- fingerprint 0x40 --
+
+10:28:07 [BODY-SWEEP] FP 0x40 → 22F190 (VIN) ← RAW "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" [bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] ascii="3C6TRVDG1EE116790" <<< SANE VIN — real module]
+
+10:28:07 [BODY-SWEEP] FP 0x40 → 22F18C (ECU serial) ← RAW "012\r0:62F18C5A5947\r1:31504536434E20\r2:2020202020" [bytes=[0x5A 0x59 0x47 0x31 0x50 0x45 0x36 0x43 0x4E 0x20 0x20 0x20 0x20 0x20 0x20] ascii="ZYG1PE6CN "]
+
+10:28:07 [BODY-SWEEP] FP 0x40 → 22F195 (ECU software version) ← RAW "62F1950203" [bytes=[0x02 0x03] ascii=".."]
+
+10:28:07 [BODY-SWEEP] FP 0x40 → 22F18A (system supplier id) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:28:08 [BODY-SWEEP] FP 0x40 → 22F18B (ECU manufacturing date) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:28:08 [BODY-SWEEP] ---- Phase 3: DID sweep on [0x28, 0x40] (2560 DIDs/module across pages [F1, 00, 01, 02, 03, 04, 1A, 25, 28, 29]) ----
+
+10:28:08 [BODY-SWEEP] -- DID sweep 0x28 --
+
+10:28:08 [BODY-SWEEP] 0x28 DID F100 POSITIVE ← "020\r0:62F100303437\r1:32373633354143\r2:20303236353234\r3:32393034202013\r4:0823072092" bytes=[0x30 0x34 0x37 0x32 0x37 0x36 0x33 0x35 0x41 0x43 0x20 0x30 0x32 0x36 0x35 0x32 0x34 0x32 0x39 0x30 0x34 0x20 0x20 0x13 0x08 0x23 0x07 0x20 0x92] [CONSTANT? — suspect, a response is not a value]
+
+10:28:08 [BODY-SWEEP] 0x28 DID F101 POSITIVE ← "020\r0:62F101363832\r1:32353739354143\r2:20303236353234\r3:32393530202020\r4:2020202020" bytes=[0x36 0x38 0x32 0x32 0x35 0x37 0x39 0x35 0x41 0x43 0x20 0x30 0x32 0x36 0x35 0x32 0x34 0x32 0x39 0x35 0x30 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:28:18 [BODY-SWEEP] 0x28 DID F180 POSITIVE ← "011\r0:62F180010122\r1:17041300000000\r2:20200001" bytes=[0x01 0x01 0x22 0x17 0x04 0x13 0x00 0x00 0x00 0x00 0x20 0x20 0x00 0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:28:19 [BODY-SWEEP] 0x28 DID F181 POSITIVE ← "011\r0:62F181010110\r1:00060000000000\r2:20200001" bytes=[0x01 0x01 0x10 0x00 0x06 0x00 0x00 0x00 0x00 0x00 0x20 0x20 0x00 0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:28:19 [BODY-SWEEP] 0x28 DID F182 POSITIVE ← "011\r0:62F182010110\r1:00060000000000\r2:20200001" bytes=[0x01 0x01 0x10 0x00 0x06 0x00 0x00 0x00 0x00 0x00 0x20 0x20 0x00 0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:28:19 [BODY-SWEEP] 0x28 DID F183 POSITIVE ← "010\r0:62F183012020\r1:20202020202020\r2:130823" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x13 0x08 0x23] [CONSTANT? — suspect, a response is not a value]
+
+10:28:19 [BODY-SWEEP] 0x28 DID F184 POSITIVE ← "010\r0:62F184012020\r1:20202020202020\r2:140113" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x14 0x01 0x13] [CONSTANT? — suspect, a response is not a value]
+
+10:28:20 [BODY-SWEEP] 0x28 DID F185 POSITIVE ← "010\r0:62F185012020\r1:20202020202020\r2:140113" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x14 0x01 0x13] [CONSTANT? — suspect, a response is not a value]
+
+10:28:20 [BODY-SWEEP] 0x28 DID F186 POSITIVE ← "62F18601" bytes=[0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:28:20 [BODY-SWEEP] 0x28 DID F187 POSITIVE ← "00E\r0:62F187303437\r1:32373633354144\r2:20" bytes=[0x30 0x34 0x37 0x32 0x37 0x36 0x33 0x35 0x41 0x44 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:28:21 [BODY-SWEEP] 0x28 DID F18C POSITIVE ← "012\r0:62F18C543030\r1:34463232383330\r2:3836393420" bytes=[0x54 0x30 0x30 0x34 0x46 0x32 0x32 0x38 0x33 0x30 0x38 0x36 0x39 0x34 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:28:22 [BODY-SWEEP] 0x28 DID F190 POSITIVE ← "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] [CONSTANT? — suspect, a response is not a value]
+
+10:28:22 [BODY-SWEEP] 0x28 DID F192 POSITIVE ← "00E\r0:62F192303236\r1:35393536303336\r2:20" bytes=[0x30 0x32 0x36 0x35 0x39 0x35 0x36 0x30 0x33 0x36 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:28:22 [BODY-SWEEP] 0x28 DID F193 POSITIVE ← "62F19300" bytes=[0x00] [CONSTANT? — suspect, a response is not a value]
+
+10:28:23 [BODY-SWEEP] 0x28 DID F194 POSITIVE ← "00E\r0:62F194313236\r1:37393932353834\r2:20" bytes=[0x31 0x32 0x36 0x37 0x39 0x39 0x32 0x35 0x38 0x34 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:28:23 [BODY-SWEEP] 0x28 DID F195 POSITIVE ← "62F1950207" bytes=[0x02 0x07] [CONSTANT? — suspect, a response is not a value]
+
+10:28:23 [BODY-SWEEP] 0x28 DID F196 POSITIVE ← "009\r0:62F196202020\r1:202020" bytes=[0x20 0x20 0x20 0x20 0x20 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:28:24 [BODY-SWEEP] 0x28 DID F1A0 POSITIVE ← "043\r0:62F1A0303437\r1:32373633354144\r2:20334336545256\r3:44473145453131\r4:36373930303236\r5:35393536303336\r6:20003132363739\r7:39323538342002\r8:07202020202020\r9:EC07200B73" bytes=[0x30 0x34 0x37 0x32 0x37 0x36 0x33 0x35 0x41 0x44 0x20 0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30 0x30 0x32 0x36 0x35 0x39 0x35 0x36 0x30 0x33 0x36 0x20 0x00 0x31 0x32 0x36 0x37 0x39 0x39 0x32 0x35 0x38 0x34 0x20 0x02 0x07 0x20 0x20 0x20 0x20 0x20 0x20 0xEC 0x07 0x20 0x0B 0x73] [CONSTANT? — suspect, a response is not a value]
+
+10:28:25 [BODY-SWEEP] 0x28 DID F1A4 POSITIVE ← "009\r0:62F1A4202020\r1:202020" bytes=[0x20 0x20 0x20 0x20 0x20 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:28:25 [BODY-SWEEP] 0x28 DID F1A5 POSITIVE ← "008\r0:62F1A5EC0720\r1:0B73" bytes=[0xEC 0x07 0x20 0x0B 0x73] [CONSTANT? — suspect, a response is not a value]
+
+10:31:26 [BODY-SWEEP] DID SWEEP POSITIVES on 0x28: [F100, F101, F180, F181, F182, F183, F184, F185, F186, F187, F18C, F190, F192, F193, F194, F195, F196, F1A0, F1A4, F1A5]
+
+10:31:26 [BODY-SWEEP] -- DID sweep 0x40 --
+
+10:31:27 GPS: useGPS pipeline starting (dashboard mounted)
+
+10:31:27 GPS: startLocationUpdates() called
+
+10:31:27 GPS: permissions ok (foreground=granted, background=granted)
+
+10:31:27 GPS: watcher started OK
+
+10:31:27 GPS: fix #1 speed=-1.0m/s alt=116m acc=22m
+
+10:31:27 GPS: fix #2 speed=-1.0m/s alt=116m acc=22m
+
+10:31:27 GPS: fix #3 speed=-1.0m/s alt=116m acc=12m
+
+10:31:29 GPS: stopLocationUpdates() called (watcher was live, 7 fixes delivered)
+
+10:31:36 [BODY-SWEEP] 0x40 DID F180 POSITIVE ← "011\r0:62F180010142\r1:434D3633372E30\r2:30320005" bytes=[0x01 0x01 0x42 0x43 0x4D 0x36 0x33 0x37 0x2E 0x30 0x30 0x32 0x00 0x05] [CONSTANT? — suspect, a response is not a value]
+
+10:31:37 [BODY-SWEEP] 0x40 DID F181 POSITIVE ← "011\r0:62F181010143\r1:30323033303032\r2:20200005" bytes=[0x01 0x01 0x43 0x30 0x32 0x30 0x33 0x30 0x30 0x32 0x20 0x20 0x00 0x05] [CONSTANT? — suspect, a response is not a value]
+
+10:31:37 [BODY-SWEEP] 0x40 DID F182 POSITIVE ← "011\r0:62F182010120\r1:20202020202020\r2:20200005" bytes=[0x01 0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x00 0x05] [CONSTANT? — suspect, a response is not a value]
+
+10:31:37 [BODY-SWEEP] 0x40 DID F183 POSITIVE ← "010\r0:62F183012020\r1:20202020202020\r2:131207" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x13 0x12 0x07] [CONSTANT? — suspect, a response is not a value]
+
+10:31:38 [BODY-SWEEP] 0x40 DID F184 POSITIVE ← "010\r0:62F184012020\r1:20202020202020\r2:131207" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x13 0x12 0x07] [CONSTANT? — suspect, a response is not a value]
+
+10:31:38 [BODY-SWEEP] 0x40 DID F185 POSITIVE ← "010\r0:62F185012020\r1:20202020202020\r2:131207" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x13 0x12 0x07] [CONSTANT? — suspect, a response is not a value]
+
+10:31:38 [BODY-SWEEP] 0x40 DID F186 POSITIVE ← "62F18601" bytes=[0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:31:38 [BODY-SWEEP] ================ BODY SWEEP START ================
+
+10:31:38 [BODY-SWEEP] Targets: 256 address(es) as 18DAF1. Known-live from prior census: [10, 18, 1F, 40, 60, C6, C7, CB]
+
+10:31:38 [BODY-SWEEP] A responder is any address whose 3E00 draws a positive, an NRC, or a bus error — i.e. something is there. Silence = not reachable at the port.
+
+10:31:38 [BODY-SWEEP] ---- Phase 1: address sweep (3E00 to 18DAF1) ----
+
+10:31:38 [BODY-SWEEP] 0x40 DID F187 POSITIVE ← "00E\r0:62F187303437\r1:32373631384144\r2:20" bytes=[0x30 0x34 0x37 0x32 0x37 0x36 0x31 0x38 0x41 0x44 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:31:55 [BODY-SWEEP] 0x40 DID F1E9 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:31:55 [BODY-SWEEP] 0x40 DID F1EA NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:31:55 [BODY-SWEEP] 0x10 RESPONDER [nrc] ← 3E00 "7F3E12" [NRC 12: subFunctionNotSupported]
+
+10:31:55 [BODY-SWEEP] 0x40 DID F1EB NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:31:55 [BODY-SWEEP] 0x40 DID F1EC NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:32:10 [BODY-SWEEP] ...scanned 32/256 (0x1F), 1 responder(s) so far
+
+10:32:19 [BODY-SWEEP] 0x28 RESPONDER [positive] ← 3E00 "7E00" <<< NEW (not in prior census)
+
+10:32:43 [BODY-SWEEP] ...scanned 64/256 (0x3F), 2 responder(s) so far
+
+10:32:43 [BODY-SWEEP] 0x40 RESPONDER [positive] ← 3E00 "7E00"
+
+10:33:16 [BODY-SWEEP] ...scanned 96/256 (0x5F), 3 responder(s) so far
+
+10:33:48 [BODY-SWEEP] ...scanned 128/256 (0x7F), 3 responder(s) so far
+
+10:34:21 [BODY-SWEEP] ...scanned 160/256 (0x9F), 3 responder(s) so far
+
+10:34:53 [BODY-SWEEP] ...scanned 192/256 (0xBF), 3 responder(s) so far
+
+10:35:26 [BODY-SWEEP] ...scanned 224/256 (0xDF), 3 responder(s) so far
+
+10:35:58 [BODY-SWEEP] ...scanned 256/256 (0xFF), 3 responder(s) so far
+
+10:35:58 [BODY-SWEEP] ADDRESS SWEEP RESPONDERS: [0x10, 0x28, 0x40]
+
+10:35:58 [BODY-SWEEP] ---- Phase 2: fingerprint responders (ISO identification DIDs) ----
+
+10:35:58 [BODY-SWEEP] -- fingerprint 0x10 --
+
+10:35:59 [BODY-SWEEP] 0x40 DID 1AB0 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:35:59 [BODY-SWEEP] 0x40 DID 1AB1 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:35:59 [BODY-SWEEP] 0x40 DID 1AB2 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:35:59 [BODY-SWEEP] 0x40 DID 1AB3 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:36:00 [BODY-SWEEP] FP 0x10 → 22F190 (VIN) ← RAW "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" [bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] ascii="3C6TRVDG1EE116790" <<< SANE VIN — real module]
+
+10:36:00 [BODY-SWEEP] 0x40 DID 1AB4 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:36:00 [BODY-SWEEP] FP 0x10 → 22F18C (ECU serial) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:36:00 [BODY-SWEEP] 0x40 DID 1AB5 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:36:00 [BODY-SWEEP] FP 0x10 → 22F195 (ECU software version) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:36:00 [BODY-SWEEP] 0x40 DID 1AB6 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:36:00 [BODY-SWEEP] FP 0x10 → 22F18A (system supplier id) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:36:00 [BODY-SWEEP] 0x40 DID 1AB7 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:36:00 [BODY-SWEEP] FP 0x10 → 22F18B (ECU manufacturing date) ← RAW "7F2212" [NRC 12: subFunctionNotSupported] [no positive response]
+
+10:36:00 [BODY-SWEEP] 0x40 DID 1AB8 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:36:00 [BODY-SWEEP] 0x40 DID 1AB9 NRC ← "7F2212" [NRC 12: subFunctionNotSupported]
+
+10:36:01 [BODY-SWEEP] -- fingerprint 0x28 --
+
+10:36:02 [BODY-SWEEP] FP 0x28 → 22F190 (VIN) ← RAW "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" [bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] ascii="3C6TRVDG1EE116790" <<< SANE VIN — real module]
+
+10:36:02 [BODY-SWEEP] FP 0x28 → 22F18C (ECU serial) ← RAW "012\r0:62F18C543030\r1:34463232383330\r2:3836393420" [bytes=[0x54 0x30 0x30 0x34 0x46 0x32 0x32 0x38 0x33 0x30 0x38 0x36 0x39 0x34 0x20] ascii="T004F228308694 "]
+
+10:36:02 [BODY-SWEEP] FP 0x28 → 22F195 (ECU software version) ← RAW "62F1950207" [bytes=[0x02 0x07] ascii=".."]
+
+10:36:02 [BODY-SWEEP] FP 0x28 → 22F18A (system supplier id) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:36:03 [BODY-SWEEP] FP 0x28 → 22F18B (ECU manufacturing date) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:36:03 [BODY-SWEEP] -- fingerprint 0x40 --
+
+10:36:05 [BODY-SWEEP] FP 0x40 → 22F190 (VIN) ← RAW "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" [bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] ascii="3C6TRVDG1EE116790" <<< SANE VIN — real module]
+
+10:36:05 [BODY-SWEEP] FP 0x40 → 22F18C (ECU serial) ← RAW "012\r0:62F18C5A5947\r1:31504536434E20\r2:2020202020" [bytes=[0x5A 0x59 0x47 0x31 0x50 0x45 0x36 0x43 0x4E 0x20 0x20 0x20 0x20 0x20 0x20] ascii="ZYG1PE6CN "]
+
+10:36:05 [BODY-SWEEP] FP 0x40 → 22F195 (ECU software version) ← RAW "62F1950203" [bytes=[0x02 0x03] ascii=".."]
+
+10:36:05 [BODY-SWEEP] FP 0x40 → 22F18A (system supplier id) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:36:05 [BODY-SWEEP] FP 0x40 → 22F18B (ECU manufacturing date) ← RAW "7F2231" [NRC 31: requestOutOfRange (DID not supported in current session)] [no positive response]
+
+10:36:06 [BODY-SWEEP] ---- Phase 3: DID sweep on [0x28, 0x40] (2560 DIDs/module across pages [F1, 00, 01, 02, 03, 04, 1A, 25, 28, 29]) ----
+
+10:36:06 [BODY-SWEEP] -- DID sweep 0x28 --
+
+10:36:07 [BODY-SWEEP] 0x28 DID F100 POSITIVE ← "020\r0:62F100303437\r1:32373633354143\r2:20303236353234\r3:32393034202013\r4:0823072092" bytes=[0x30 0x34 0x37 0x32 0x37 0x36 0x33 0x35 0x41 0x43 0x20 0x30 0x32 0x36 0x35 0x32 0x34 0x32 0x39 0x30 0x34 0x20 0x20 0x13 0x08 0x23 0x07 0x20 0x92] [CONSTANT? — suspect, a response is not a value]
+
+10:36:08 [BODY-SWEEP] 0x28 DID F101 POSITIVE ← "020\r0:62F101363832\r1:32353739354143\r2:20303236353234\r3:32393530202020\r4:2020202020" bytes=[0x36 0x38 0x32 0x32 0x35 0x37 0x39 0x35 0x41 0x43 0x20 0x30 0x32 0x36 0x35 0x32 0x34 0x32 0x39 0x35 0x30 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:36:27 [BODY-SWEEP] 0x28 DID F180 POSITIVE ← "011\r0:62F180010122\r1:17041300000000\r2:20200001" bytes=[0x01 0x01 0x22 0x17 0x04 0x13 0x00 0x00 0x00 0x00 0x20 0x20 0x00 0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:36:28 [BODY-SWEEP] 0x28 DID F181 POSITIVE ← "011\r0:62F181010110\r1:00060000000000\r2:20200001" bytes=[0x01 0x01 0x10 0x00 0x06 0x00 0x00 0x00 0x00 0x00 0x20 0x20 0x00 0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:36:28 [BODY-SWEEP] 0x28 DID F182 POSITIVE ← "011\r0:62F182010110\r1:00060000000000\r2:20200001" bytes=[0x01 0x01 0x10 0x00 0x06 0x00 0x00 0x00 0x00 0x00 0x20 0x20 0x00 0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:36:29 [BODY-SWEEP] 0x28 DID F183 POSITIVE ← "010\r0:62F183012020\r1:20202020202020\r2:130823" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x13 0x08 0x23] [CONSTANT? — suspect, a response is not a value]
+
+10:36:29 [BODY-SWEEP] 0x28 DID F184 POSITIVE ← "010\r0:62F184012020\r1:20202020202020\r2:140113" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x14 0x01 0x13] [CONSTANT? — suspect, a response is not a value]
+
+10:36:30 [BODY-SWEEP] 0x28 DID F185 POSITIVE ← "010\r0:62F185012020\r1:20202020202020\r2:140113" bytes=[0x01 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x14 0x01 0x13] [CONSTANT? — suspect, a response is not a value]
+
+10:36:30 [BODY-SWEEP] 0x28 DID F186 POSITIVE ← "62F18601" bytes=[0x01] [CONSTANT? — suspect, a response is not a value]
+
+10:36:30 [BODY-SWEEP] 0x28 DID F187 POSITIVE ← "00E\r0:62F187303437\r1:32373633354144\r2:20" bytes=[0x30 0x34 0x37 0x32 0x37 0x36 0x33 0x35 0x41 0x44 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:36:31 [BODY-SWEEP] 0x28 DID F18C POSITIVE ← "012\r0:62F18C543030\r1:34463232383330\r2:3836393420" bytes=[0x54 0x30 0x30 0x34 0x46 0x32 0x32 0x38 0x33 0x30 0x38 0x36 0x39 0x34 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:36:32 [BODY-SWEEP] 0x28 DID F190 POSITIVE ← "014\r0:62F190334336\r1:54525644473145\r2:45313136373930" bytes=[0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30] [CONSTANT? — suspect, a response is not a value]
+
+10:36:33 [BODY-SWEEP] 0x28 DID F192 POSITIVE ← "00E\r0:62F192303236\r1:35393536303336\r2:20" bytes=[0x30 0x32 0x36 0x35 0x39 0x35 0x36 0x30 0x33 0x36 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:36:33 [BODY-SWEEP] 0x28 DID F193 POSITIVE ← "62F19300" bytes=[0x00] [CONSTANT? — suspect, a response is not a value]
+
+10:36:34 [BODY-SWEEP] 0x28 DID F194 POSITIVE ← "00E\r0:62F194313236\r1:37393932353834\r2:20" bytes=[0x31 0x32 0x36 0x37 0x39 0x39 0x32 0x35 0x38 0x34 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:36:34 [BODY-SWEEP] 0x28 DID F195 POSITIVE ← "62F1950207" bytes=[0x02 0x07] [CONSTANT? — suspect, a response is not a value]
+
+10:36:35 [BODY-SWEEP] 0x28 DID F196 POSITIVE ← "009\r0:62F196202020\r1:202020" bytes=[0x20 0x20 0x20 0x20 0x20 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:36:36 [BODY-SWEEP] 0x28 DID F1A0 POSITIVE ← "043\r0:62F1A0303437\r1:32373633354144\r2:20334336545256\r3:44473145453131\r4:36373930303236\r5:35393536303336\r6:20003132363739\r7:39323538342002\r8:07202020202020\r9:EC07200B73" bytes=[0x30 0x34 0x37 0x32 0x37 0x36 0x33 0x35 0x41 0x44 0x20 0x33 0x43 0x36 0x54 0x52 0x56 0x44 0x47 0x31 0x45 0x45 0x31 0x31 0x36 0x37 0x39 0x30 0x30 0x32 0x36 0x35 0x39 0x35 0x36 0x30 0x33 0x36 0x20 0x00 0x31 0x32 0x36 0x37 0x39 0x39 0x32 0x35 0x38 0x34 0x20 0x02 0x07 0x20 0x20 0x20 0x20 0x20 0x20 0xEC 0x07 0x20 0x0B 0x73] [CONSTANT? — suspect, a response is not a value]
+
+10:36:37 [BODY-SWEEP] 0x28 DID F1A4 POSITIVE ← "009\r0:62F1A4202020\r1:202020" bytes=[0x20 0x20 0x20 0x20 0x20 0x20] [CONSTANT? — suspect, a response is not a value]
+
+10:36:38 [BODY-SWEEP] 0x28 DID F1A5 POSITIVE ← "008\r0:62F1A5EC0720\r1:0B73" bytes=[0xEC 0x07 0x20 0x0B 0x73] [CONSTANT? — suspect, a response is not a value]
+
+10:37:00 GPS: useGPS pipeline starting (dashboard mounted)
+
+10:37:00 GPS: startLocationUpdates() called
+
+10:37:00 GPS: permissions ok (foreground=granted, background=granted)
+
+10:37:00 GPS: watcher started OK
+
+10:37:00 GPS: fix #1 speed=-1.0m/s alt=116m acc=13m
+
+10:37:00 GPS: fix #2 speed=-1.0m/s alt=116m acc=26m
+
+10:37:02 GPS: stopLocationUpdates() called (watcher was live, 2 fixes delivered)
+
+10:37:15 GPS: useGPS pipeline starting (dashboard mounted)
+
+10:37:15 GPS: startLocationUpdates() called
+
+10:37:15 GPS: permissions ok (foreground=granted, background=granted)
+
+10:37:15 GPS: watcher started OK
+
+10:37:15 GPS: fix #1 speed=-1.0m/s alt=116m acc=23m
+
+10:37:15 GPS: fix #2 speed=-1.0m/s alt=116m acc=23m
+
+10:37:16 GPS: fix #3 speed=-1.0m/s alt=115m acc=25m
+
+10:37:16 GPS: stopLocationUpdates() called (watcher was live, 3 fixes delivered)
+
+10:38:04 [BODY-SWEEP] 0x28 DID 014E OTHER ← "STOPPED"
+
+10:38:12 BLE: Device disconnected
+
+10:38:12 BLE: Device disconnected
+
+10:38:12 BLE: Notify error: Device 686D7FB8-3A08-CBE4-9718-7A623105FA65 was disconnected
+
+10:38:12 BLE: Notify error: Operation was cancelled
+
+10:38:12 [BODY-SWEEP] DID SWEEP 0x40 ERROR: Device 686D7FB8-3A08-CBE4-9718-7A623105FA65 was disconnected
+
+10:38:12 [BODY-SWEEP] DID SWEEP 0x28 ERROR: Not connected
+
+10:38:12 [BODY-SWEEP] RESET WARN: Not connected
+
+10:38:12 [BODY-SWEEP] DID SWEEP POSITIVES on 0x40: [F180, F181, F182, F183, F184, F185, F186, F187]
+
+10:38:12 [BODY-SWEEP] ================ SUMMARY ================
+
+10:38:12 [BODY-SWEEP] Responders: [0x10, 0x28, 0x40]
+
+10:38:12 [BODY-SWEEP] New (not in prior powertrain census): [0x28]
+
+10:38:12 [BODY-SWEEP] Next: a VARYING multi-byte DID is the pressure-shaped signal. Ground-truth with the 30/40/50/60 method (vault: TPMS Hunt) — set four distinct known pressures and confirm four candidate values track them.
+
+10:38:12 [BODY-SWEEP] ================ BODY SWEEP END ================
+
+10:38:12 [BODY-SWEEP] Restoring adapter via full re-init (ATZ + standard init)...
+
+10:38:12 OBD: Sending ATZ (reset)...
+
+10:38:12 [BODY-SWEEP] RESET WARN: Not connected
+
+10:38:12 [BODY-SWEEP] DID SWEEP POSITIVES on 0x28: [F100, F101, F180, F181, F182, F183, F184, F185, F186, F187, F18C, F190, F192, F193, F194, F195, F196, F1A0, F1A4, F1A5]
+
+10:38:12 [BODY-SWEEP] -- DID sweep 0x40 --
+
+10:38:12 OBD: Init failed: Not connected
+
+10:38:12 [BODY-SWEEP] Adapter re-init complete
+
+10:38:12 [BODY-SWEEP] DID SWEEP 0x40 ERROR: Not connected
+
+10:38:12 [BODY-SWEEP] RESET WARN: Not connected
+
+10:38:12 [BODY-SWEEP] DID SWEEP POSITIVES on 0x40: [none]
+
+10:38:12 [BODY-SWEEP] ================ SUMMARY ================
+
+10:38:12 [BODY-SWEEP] Responders: [0x10, 0x28, 0x40]
+
+10:38:12 [BODY-SWEEP] New (not in prior powertrain census): [0x28]
+
+10:38:12 [BODY-SWEEP] Next: a VARYING multi-byte DID is the pressure-shaped signal. Ground-truth with the 30/40/50/60 method (vault: TPMS Hunt) — set four distinct known pressures and confirm four candidate values track them.
+
+10:38:12 [BODY-SWEEP] ================ BODY SWEEP END ================
+
+10:38:12 [BODY-SWEEP] Restoring adapter via full re-init (ATZ + standard init)...
+
+10:38:12 OBD: Sending ATZ (reset)...
+
+10:38:12 OBD: Init failed: Not connected
+
+10:38:12 [BODY-SWEEP] Adapter re-init complete
+
+10:40:11 GPS: useGPS pipeline starting (dashboard mounted)
+
+10:40:11 GPS: startLocationUpdates() called
+
+10:40:11 GPS: permissions ok (foreground=granted, background=granted)
+
+10:40:11 GPS: watcher started OK
+
+10:40:11 GPS: fix #1 speed=-1.0m/s alt=115m acc=26m
+
+10:40:11 GPS: fix #2 speed=-1.0m/s alt=115m acc=26m
+
+10:40:11 GPS: fix #3 speed=-1.0m/s alt=115m acc=323m
+
+10:40:11 GPS: stopLocationUpdates() called (watcher was live, 3 fixes delivered)
