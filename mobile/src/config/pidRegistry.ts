@@ -252,6 +252,33 @@ export const PID_REGISTRY: PidDef[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
+export interface Mode01Discovery {
+  /** Mode 01 PIDs the ECU reported as supported (uppercase hex). */
+  supported: Set<string>;
+  /** Whether discovery has finished — before it has, assume supported. */
+  done: boolean;
+}
+
+/**
+ * Whether a gauge should render given Mode 01 discovery results.
+ *
+ * Only fuel-trim gauges are gated: the ECU enumerates which Mode 01 PIDs it
+ * answers, and a denied trim would sit at `--` forever. Everything else is
+ * always renderable. Before discovery finishes we assume supported, so gauges
+ * are not hidden during the first seconds of a connection.
+ *
+ * Lives here rather than beside either caller so the dashboard and focus mode
+ * cannot drift apart.
+ */
+export function isFuelTrimSupported(
+  pid: PidDef,
+  discovery: Mode01Discovery,
+): boolean {
+  if (pid.gaugeMode !== 'fuel_trim') return true;
+  if (!discovery.done) return true;
+  return discovery.supported.has(pid.pid.toUpperCase());
+}
+
 /** Get a PID definition by id. */
 export function getPidDef(id: string): PidDef | undefined {
   return PID_REGISTRY.find((p) => p.id === id);

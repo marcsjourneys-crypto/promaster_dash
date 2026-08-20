@@ -11,8 +11,7 @@ import { StatusPill } from '../components/StatusPill';
 import { useMockData } from '../hooks/useMockData';
 import { useGPS } from '../hooks/useGPS';
 import { colors, fonts } from '../config/theme';
-import { getSortedPids, type PidDef } from '../config/pidRegistry';
-import { isFuelTrimSupported } from '../utils/focusLayout';
+import { getSortedPids, isFuelTrimSupported, type PidDef } from '../config/pidRegistry';
 import { forceEndTrip } from '../services/tripManager';
 import { IMPERIAL_UNITS, type Units } from '../utils/units';
 

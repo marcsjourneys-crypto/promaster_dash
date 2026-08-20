@@ -5,36 +5,15 @@
  * which of the user's chosen PIDs are actually renderable right now.
  */
 
-import { getPidDef, type PidDef } from '../config/pidRegistry';
+import {
+  getPidDef,
+  isFuelTrimSupported,
+  type Mode01Discovery,
+  type PidDef,
+} from '../config/pidRegistry';
 
 /** UI cap on focus gauges. Not enforced here — see resolveFocusGauges. */
 export const MAX_FOCUS_GAUGES = 3;
-
-export interface Mode01Discovery {
-  /** Mode 01 PIDs the ECU reported as supported (uppercase hex). */
-  supported: Set<string>;
-  /** Whether discovery has finished — before it has, assume supported. */
-  done: boolean;
-}
-
-/**
- * Whether a gauge should render given Mode 01 discovery results.
- *
- * Only fuel-trim gauges are gated: the ECU enumerates which Mode 01 PIDs it
- * answers, and a denied trim would sit at `--` forever. Everything else is
- * always renderable. Before discovery finishes we assume supported, so gauges
- * are not hidden during the first seconds of a connection.
- *
- * Shared with the dashboard so the two screens cannot drift apart.
- */
-export function isFuelTrimSupported(
-  pid: PidDef,
-  discovery: Mode01Discovery,
-): boolean {
-  if (pid.gaugeMode !== 'fuel_trim') return true;
-  if (!discovery.done) return true;
-  return discovery.supported.has(pid.pid.toUpperCase());
-}
 
 /**
  * Map stored focus PID ids to registry definitions, dropping any that cannot

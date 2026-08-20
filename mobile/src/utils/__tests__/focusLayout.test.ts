@@ -1,11 +1,7 @@
 /** Which gauges focus mode actually renders. */
 
-import {
-  resolveFocusGauges,
-  isFuelTrimSupported,
-  MAX_FOCUS_GAUGES,
-} from '../focusLayout';
-import { getPidDef } from '../../config/pidRegistry';
+import { resolveFocusGauges, MAX_FOCUS_GAUGES } from '../focusLayout';
+import { getPidDef, isFuelTrimSupported } from '../../config/pidRegistry';
 
 const NO_DISCOVERY = { supported: new Set<string>(), done: false };
 
