@@ -12,7 +12,7 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { GaugeCard } from './GaugeCard';
 import { AlertBanner } from './AlertBanner';
 import { colors, fonts } from '../config/theme';
-import { formatGaugeValue } from '../utils/gaugeFormat';
+import { gaugeCardProps } from '../utils/gaugeFormat';
 import type { PidDef } from '../config/pidRegistry';
 import type { Units } from '../utils/units';
 
@@ -59,18 +59,7 @@ export function FocusView({ gauges, units, onExit, onNavigate }: FocusViewProps)
           const rawValue = (store as any)[pid.id] as number | null;
           return (
             <View key={pid.id} style={styles.gaugeSlot}>
-              <GaugeCard
-                title={pid.label}
-                value={formatGaugeValue(pid, rawValue, units)}
-                unit={units.gaugeUnit(pid.unit)}
-                rawValue={units.gaugeValue(pid.unit, rawValue)}
-                min={units.gaugeValue(pid.unit, pid.range[0])!}
-                max={units.gaugeValue(pid.unit, pid.range[1])!}
-                mode={pid.gaugeMode}
-                warn={units.gaugeValue(pid.unit, pid.warn)}
-                crit={units.gaugeValue(pid.unit, pid.crit)}
-                scale={FOCUS_SCALE}
-              />
+              <GaugeCard {...gaugeCardProps(pid, rawValue, units)} scale={FOCUS_SCALE} />
             </View>
           );
         })}

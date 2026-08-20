@@ -14,7 +14,7 @@ import { colors, fonts } from '../config/theme';
 import { getSortedPids, isFuelTrimSupported } from '../config/pidRegistry';
 import { forceEndTrip } from '../services/tripManager';
 import { IMPERIAL_UNITS, type Units } from '../utils/units';
-import { formatGaugeValue } from '../utils/gaugeFormat';
+import { gaugeCardProps } from '../utils/gaugeFormat';
 import { resolveFocusGauges } from '../utils/focusLayout';
 import { FocusView } from '../components/FocusView';
 
@@ -182,17 +182,7 @@ export function DashboardScreen({
 
           return (
             <View key={pid.id} style={fullWidth ? styles.gaugeCardFull : styles.gaugeCardHalf}>
-              <GaugeCard
-                title={pid.label}
-                value={formatGaugeValue(pid, rawValue, units)}
-                unit={units.gaugeUnit(pid.unit)}
-                rawValue={units.gaugeValue(pid.unit, rawValue)}
-                min={units.gaugeValue(pid.unit, pid.range[0])!}
-                max={units.gaugeValue(pid.unit, pid.range[1])!}
-                mode={pid.gaugeMode}
-                warn={units.gaugeValue(pid.unit, pid.warn)}
-                crit={units.gaugeValue(pid.unit, pid.crit)}
-              />
+              <GaugeCard {...gaugeCardProps(pid, rawValue, units)} />
             </View>
           );
         })}
