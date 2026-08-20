@@ -55,7 +55,9 @@ export function SegmentBar({ value, min, max, mode, warn, crit, scale = 1 }: Seg
             />
           ))}
         </View>
-        {trimLabel !== '' && <Text style={styles.label}>{trimLabel}</Text>}
+        {trimLabel !== '' && (
+          <Text style={[styles.label, { fontSize: 11 * scale }]}>{trimLabel}</Text>
+        )}
       </View>
     );
   }
@@ -113,7 +115,9 @@ export function SegmentBar({ value, min, max, mode, warn, crit, scale = 1 }: Seg
           />
         ))}
       </View>
-      {label !== '' && <Text style={styles.label}>{label}</Text>}
+      {label !== '' && (
+        <Text style={[styles.label, { fontSize: 11 * scale }]}>{label}</Text>
+      )}
     </View>
   );
 }
