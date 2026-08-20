@@ -45,6 +45,10 @@ export interface Settings {
   tempUnit: TempUnit;
   speedUnit: SpeedUnit;
 
+  // Focus mode — up to 3 gauges rendered full-screen
+  focusPids: string[];
+  focusActive: boolean;
+
   // Data management
   dataRetentionDays: number;
 
@@ -79,6 +83,8 @@ export const DEFAULT_SETTINGS: Settings = {
   startNightMode: false,
   tempUnit: 'F',
   speedUnit: 'mph',
+  focusPids: [],
+  focusActive: false,
   dataRetentionDays: 365,
   enabledPids: getDefaultEnabledPids(),
   severeDuty: false,
