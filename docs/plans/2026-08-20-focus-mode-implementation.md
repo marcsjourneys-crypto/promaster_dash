@@ -14,6 +14,21 @@
 
 ---
 
+## STATUS: executed 2026-08-20 — this document is now historical
+
+Tasks 1–8 are implemented and committed. Task 9 (device tuning) is outstanding.
+
+The code diverged from this plan in four places. **Where they disagree, the code is right.**
+
+1. **`resolveFocusGauges` takes three arguments, not two.** Task 2 below still shows the original `(focusPids, discovery)` signature; Task 6 shows the corrected `(focusPids, discovery, enabledPids)`. Review found that a focused-but-disabled gauge is never polled and would render a frozen stale value at 2.4×. See the Correction section in the design doc.
+2. **`isFuelTrimSupported` lives in `pidRegistry.ts`, not `focusLayout.ts`.** Having `DashboardScreen` import from a focus-mode module to render its normal view was a backwards dependency.
+3. **The focus button keys off the *resolved* gauge list**, not raw `focusPids.length`. The two disagreed when every pick was disabled, producing a button that visibly did nothing.
+4. **Test counts here are stale.** The plan predicted 101; the branch has 109, because review added cases for the enabled-subset rule, de-duplication, non-array input, and the shared prop builder. Trust `npm test`, not this document.
+
+---
+
+---
+
 ## Before you start
 
 Run these from `mobile/` and confirm the baseline is green:

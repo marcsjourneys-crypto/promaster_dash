@@ -68,7 +68,9 @@ The cap of 3 is enforced in the Settings UI, not the type. A `string[]` holding 
 
 ### Entry and exit
 
-**Entry:** icon button in the top status bar beside the gear. The action row already holds three `flex: 1` buttons; a fourth squeezes every label. The status bar already hosts an `iconBtn`, so this costs nothing structurally. Hidden entirely when `focusPids` is empty — no route to an empty screen.
+**Entry:** icon button in a status bar rather than the action row. The action row already holds three `flex: 1` buttons; a fourth squeezes every label. The status bar already hosts an `iconBtn`, so this costs nothing structurally.
+
+Hidden whenever no picked gauge can actually render — keyed off the *resolved* list, not the raw `focusPids`. Those differ when every pick is currently disabled, and keying off the raw list produced a button that visibly did nothing. No route to an empty screen.
 
 **Exit:** a full-width ~36px bottom strip, `▼ EXIT FOCUS`. Large target that can be hit without aiming, and unlike tap-anywhere it can't fire from a stray thumb on a bump.
 
