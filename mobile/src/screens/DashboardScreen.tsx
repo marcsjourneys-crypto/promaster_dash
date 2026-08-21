@@ -141,7 +141,8 @@ export function DashboardScreen({
         */}
         {focusGauges.length > 0 && (
           <Pressable style={styles.focusBtn} onPress={() => onSetFocusActive?.(true)}>
-            <Text style={styles.focusBtnText}>{'◱'}</Text>
+            <Text style={styles.focusBtnGlyph}>{'◱'}</Text>
+            <Text style={styles.focusBtnLabel}>FOCUS</Text>
           </Pressable>
         )}
       </View>
@@ -244,15 +245,27 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.amber,
     borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     marginLeft: 'auto',
+    alignItems: 'center',
   },
-  focusBtnText: {
+  // Label sits UNDER the glyph, not beside it. A side-by-side layout would add
+  // ~50pt of width, and statusBar is a non-wrapping row whose children do not
+  // shrink — the widest sibling would get pushed off a narrow screen. Stacking
+  // keeps the width driven by the 5-character label instead.
+  focusBtnGlyph: {
     color: colors.amber,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
-    lineHeight: 32,
+    lineHeight: 29,
+  },
+  focusBtnLabel: {
+    color: colors.amber,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginTop: 1,
   },
   iconBtn: {
     backgroundColor: colors.bgPill,
