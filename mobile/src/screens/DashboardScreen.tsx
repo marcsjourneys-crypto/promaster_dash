@@ -140,8 +140,8 @@ export function DashboardScreen({
           the gear (the only route to Settings) off the right edge.
         */}
         {focusGauges.length > 0 && (
-          <Pressable style={styles.iconBtn} onPress={() => onSetFocusActive?.(true)}>
-            <Text style={styles.iconBtnText}>{'◱'}</Text>
+          <Pressable style={styles.focusBtn} onPress={() => onSetFocusActive?.(true)}>
+            <Text style={styles.focusBtnText}>{'◱'}</Text>
           </Pressable>
         )}
       </View>
@@ -233,6 +233,26 @@ const styles = StyleSheet.create({
     gap: 5,
     alignItems: 'center',
     marginBottom: 4,
+  },
+  // Deliberately larger than iconBtn: the focus toggle was a 12pt glyph in a
+  // ~30pt box -- under Apple's 44pt minimum touch target, and hard to pick out
+  // at a glance while driving. Grown only in height, never width: statusBar is
+  // a non-wrapping row whose children do not shrink, so horizontal growth here
+  // risks pushing a sibling off the right edge.
+  focusBtn: {
+    backgroundColor: colors.bgPill,
+    borderWidth: 2,
+    borderColor: colors.amber,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    marginLeft: 'auto',
+  },
+  focusBtnText: {
+    color: colors.amber,
+    fontSize: 28,
+    fontWeight: '800',
+    lineHeight: 32,
   },
   iconBtn: {
     backgroundColor: colors.bgPill,
