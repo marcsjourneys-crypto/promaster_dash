@@ -54,9 +54,11 @@ static volatile uint32_t ringHead = 0;
 static volatile uint32_t ringTail = 0;  // read by the ISR's full check
 static volatile uint32_t lastEdgeUs = 0;
 static volatile uint32_t ringOverflows = 0;
+static volatile uint32_t edgeCount = 0;  // every edge, for the `scope` check
 
 void IRAM_ATTR onEdge() {
   uint32_t now = micros();
+  edgeCount++;
   uint32_t dur = now - lastEdgeUs;
   lastEdgeUs = now;
   // The level that just ended is the opposite of the level now on the pin.
@@ -90,6 +92,7 @@ static size_t runLen = 0;
 
 static uint32_t framesDecoded = 0, framesReported = 0, runsTried = 0;
 static bool rawDebug = false;
+static bool scopeOn = false;  // print edges/second: is the RX470C wired up?
 
 static BLEServer* server = nullptr;
 static BLECharacteristic* readingChar = nullptr;
@@ -436,7 +439,7 @@ static bool selfTest() {
 
 static void printHelp() {
   Serial.println("commands: list | add <hex id> | del <hex id> | learn on|off |"
-                 " raw on|off | half <us> | status");
+                 " raw on|off | half <us> | status | scope on|off");
 }
 
 static void handleSerial() {
@@ -479,6 +482,8 @@ static void handleSerial() {
     } else if (cmd.startsWith("half ")) {
       timing.halfUs = (uint16_t)cmd.substring(5).toInt();
       Serial.printf("half-bit = %u us\n", timing.halfUs);
+    } else if (cmd == "scope on" || cmd == "scope off") {
+      scopeOn = cmd == "scope on";
     } else if (cmd == "status") {
       Serial.printf("up %lus decoded=%lu reported=%lu runs=%lu overflows=%lu ble=%d\n",
                     (unsigned long)(millis() / 1000), (unsigned long)framesDecoded,
@@ -521,6 +526,19 @@ void loop() {
     advertiseRequested = false;
     delay(50);  // let the stack finish tearing the link down
     BLEDevice::startAdvertising();
+  }
+
+  // Wiring check: edges per second on the DATA pin and its current level.
+  // A connected RX470C chatters hundreds to thousands of edges/s on noise
+  // alone; 0 means nothing is reaching the pin.
+  static uint32_t lastScope = 0, lastEdges = 0;
+  if (scopeOn && millis() - lastScope >= 1000) {
+    uint32_t e = edgeCount;
+    Serial.printf("scope: %lu edges/s, pin=%d, runs=%lu, decoded=%lu\n",
+                  (unsigned long)(e - lastEdges), digitalRead(RX_PIN),
+                  (unsigned long)runsTried, (unsigned long)framesDecoded);
+    lastEdges = e;
+    lastScope = millis();
   }
 
   static uint32_t lastStatus = 0;

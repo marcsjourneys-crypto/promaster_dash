@@ -37,12 +37,24 @@ Partition Scheme → **Huge APP**.
 | `raw on` / `raw off` | Print ignored frames and failed decode runs |
 | `half 120` | Manchester half-bit in µs. Tune this if nothing decodes |
 | `status` | Uptime and counters |
+| `scope on` / `scope off` | Once a second: edges/s on the DATA pin and its level. The wiring check (see below) |
 
 Output lines mirror rtl_433, so you can run both side by side:
 
 ```
 TPMS id=05E671A flags=07 pressure=447.5kPa (64.9psi) temp=22C known=1
 ```
+
+## Wiring check
+
+Type `scope on`. Every second it prints edges/s on GPIO 27 and the pin level.
+
+| What you see | Meaning |
+|---|---|
+| Hundreds to thousands of edges/s with nothing transmitting | Normal. The RX470C turns noise into pulses. Wired up. |
+| Edges jump when you press a key fob near the antenna | Receiver and antenna working |
+| `0 edges/s`, pin stuck at 0 or 1 | Nothing reaching GPIO 27: check DATA wire, VCC, GND |
+| Edges drop to near 0 when you unplug the DATA wire | Confirms the count came from the receiver |
 
 ## First bring-up (go/no-go for the RX470C)
 
