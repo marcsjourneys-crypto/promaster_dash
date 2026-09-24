@@ -224,6 +224,33 @@ function ReceiverTab({
               <Row label="Frames decoded" value={String(status.decoded)} />
               <Row label="Readings sent" value={String(status.reported)} />
               <Row label="Buffer overflows" value={String(status.overflows)} />
+              {status.radio && (
+                <>
+                  <Row label="Radio edges/s" value={String(status.radio.edgesPerSec)} />
+                  <Row
+                    label="Bursts heard / decoded"
+                    value={`${status.radio.bursts} / ${status.radio.burstsDecoded}`}
+                  />
+                  <Row
+                    label="Last burst"
+                    value={
+                      status.radio.lastBurstAgeS === null
+                        ? 'none since boot'
+                        : `${formatAge(status.radio.lastBurstAgeS * 1000)} ago`
+                    }
+                  />
+                  <Row
+                    label="Decoder timing"
+                    value={`${status.radio.halfUs} µs${status.radio.inverted ? ' · inverted' : ''}`}
+                  />
+                  <Text style={styles.hint}>
+                    A burst is anything shaped like a tire transmission. Bursts heard but
+                    not decoded means the receiver hears the sensors but can't read them
+                    yet; it re-tunes itself on each one. More detail over USB serial with
+                    the bursts and dump commands.
+                  </Text>
+                </>
+              )}
             </>
           )}
           <Pressable style={[styles.btn, { marginTop: 12 }]} onPress={() => requestReplay()}>

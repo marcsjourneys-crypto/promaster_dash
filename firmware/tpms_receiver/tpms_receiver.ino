@@ -13,6 +13,7 @@
 #include <BLEUtils.h>
 #include <Preferences.h>
 
+#include "burst_log.h"
 #include "cache_entry.h"
 #include "schrader_decoder.h"
 
@@ -41,7 +42,17 @@ static const size_t MAX_IDS = 8;
 static const size_t MIN_RUN = 60;              // pulses; a frame is ~70-136
 static const uint32_t BURST_DEDUP_MS = 5000;   // one report per burst
 static const uint32_t LEARN_CONFIRM_MS = 2000; // unknown IDs must repeat
-static const uint32_t STATUS_PERIOD_MS = 5000;
+static const uint32_t STATUS_PERIOD_MS = 2000;
+
+// Burst detection is independent of decoder timing: a tire burst packs ~100
+// edges into ~16 ms, while the RX470C's noise runs at ~1 edge/ms. 60 edges
+// inside 25 ms is a burst no matter how the slicer distorts the widths.
+static const size_t BURST_EDGES = 60;
+static const uint32_t BURST_WINDOW_US = 25000;
+static const size_t CAPTURE_CAP = 400;     // pulses kept per burst
+static const size_t CAPTURE_PRE = 40;      // pulses kept from before the trigger
+static const uint32_t LOG_SAVE_MS = 10000; // NVS write rate limit
+
 
 // Seeded from the RTL-SDR capture on 2026-09-21. Editable from the app.
 static const uint32_t DEFAULT_IDS[] = {0x05E671A, 0x05E670D, 0x00FA4D3, 0x00FBFF7};
@@ -92,6 +103,30 @@ static size_t runLen = 0;
 
 static uint32_t framesDecoded = 0, framesReported = 0, runsTried = 0;
 static bool rawDebug = false;
+
+// ---- Burst capture (see BURST_EDGES) ----
+static uint16_t winDur[BURST_EDGES];       // last N pulse widths, for density
+static size_t winIdx = 0;
+static uint32_t winSum = 0;
+static schrader::Pulse hist[CAPTURE_PRE];  // pre-trigger history
+static size_t histIdx = 0;
+static schrader::Pulse capture[CAPTURE_CAP];
+static size_t captureLen = 0;
+static bool capturing = false;
+static bool captureReady = false;
+static uint32_t lastBurstMs = 0;
+static bool haveLastBurst = false;
+static uint32_t edgesPerSec = 0;
+
+// Kept for `dump` after analysis.
+static schrader::Pulse lastCapture[CAPTURE_CAP];
+static size_t lastCaptureLen = 0;
+
+// ---- Persistent log (survives power cycles) ----
+static StoredLog blog;
+static bool logDirty = false;
+static uint32_t lastLogSave = 0;
+static uint32_t sessionBursts = 0, sessionBurstsDecoded = 0;
 static bool scopeOn = false;  // print edges/second: is the RX470C wired up?
 
 static BLEServer* server = nullptr;
@@ -150,6 +185,78 @@ static void loadConfig() {
   memcpy(allowIds, DEFAULT_IDS, sizeof(DEFAULT_IDS));
   learnMode = false;
   saveConfig();
+}
+
+// Timing learned by autotune, kept separately from the allowlist so the two
+// can change independently.
+struct StoredTiming {
+  uint16_t halfUs;
+  int16_t skewUs;
+  uint8_t inverted;
+  uint8_t pad[3];
+};
+
+static void saveTiming() {
+  StoredTiming st = {};
+  st.halfUs = timing.halfUs;
+  st.skewUs = timing.skewUs;
+  st.inverted = timing.inverted ? 1 : 0;
+  prefs.putBytes("timing", &st, sizeof(st));
+}
+
+static void loadTiming() {
+  StoredTiming st = {};
+  if (prefs.getBytesLength("timing") == sizeof(st) &&
+      prefs.getBytes("timing", &st, sizeof(st)) == sizeof(st) && st.halfUs >= 60 &&
+      st.halfUs <= 400) {
+    timing.halfUs = st.halfUs;
+    timing.skewUs = st.skewUs;
+    timing.inverted = st.inverted != 0;
+  }
+}
+
+static void loadLog() {
+  if (!(prefs.getBytesLength("blog") == sizeof(blog) &&
+        prefs.getBytes("blog", &blog, sizeof(blog)) == sizeof(blog) &&
+        blog.head < LOG_LEN && blog.count <= LOG_LEN)) {
+    memset(&blog, 0, sizeof(blog));
+  }
+  blog.boots++;
+  prefs.putBytes("blog", &blog, sizeof(blog));
+}
+
+static void saveLogIfDue(bool force) {
+  if (!logDirty) return;
+  if (!force && millis() - lastLogSave < LOG_SAVE_MS) return;
+  prefs.putBytes("blog", &blog, sizeof(blog));
+  logDirty = false;
+  lastLogSave = millis();
+}
+
+static void printLogRec(const BurstRec& r) {
+  Serial.printf("  boot %3u  +%6lus  %3u pulses in %3u ms  hi~%3uus lo~%3uus  ", r.boot,
+                (unsigned long)r.uptimeS, r.pulses, r.durMs, r.hiUs, r.loUs);
+  if (r.decoded) {
+    Serial.printf("DECODED%s id=%07lX %.1fpsi\n", r.decoded == 2 ? " (autotune)" : "",
+                  (unsigned long)r.id, r.pressureRaw * 2.5f * 0.1450377f);
+  } else {
+    Serial.println("not decoded");
+  }
+}
+
+static void printLog(size_t maxRecs) {
+  Serial.printf("log: %lu boots, %lu bursts heard, %lu decoded (lifetime)\n",
+                (unsigned long)blog.boots, (unsigned long)blog.bursts, (unsigned long)blog.decoded);
+  size_t n = blog.count < maxRecs ? blog.count : maxRecs;
+  if (n == 0) {
+    Serial.println("  no bursts recorded yet");
+    return;
+  }
+  Serial.printf("  last %u burst(s), oldest first:\n", (unsigned)n);
+  for (size_t i = 0; i < n; ++i) {
+    size_t idx = (blog.head + LOG_LEN - n + i) % LOG_LEN;
+    printLogRec(blog.recs[idx]);
+  }
 }
 
 static bool isAllowed(uint32_t id) {
@@ -330,12 +437,133 @@ static void slideRun() {
   runLen = RUN_KEEP;
 }
 
+// Timing-independent burst capture. Feeds every pulse through a density
+// window; on a burst, snapshots the recent history and records until the
+// density falls back to noise.
+static void feedBurstDetector(const schrader::Pulse& p) {
+  winSum -= winDur[winIdx];
+  winDur[winIdx] = p.us;
+  winSum += p.us;
+  winIdx = (winIdx + 1) % BURST_EDGES;
+  bool dense = winSum < BURST_WINDOW_US;
+
+  if (capturing) {
+    if (captureLen < CAPTURE_CAP) capture[captureLen++] = p;
+    // Stop once the window has been sparse for a while, or when full.
+    if (captureLen >= CAPTURE_CAP || (!dense && p.us > 2000)) {
+      capturing = false;
+      captureReady = true;
+    }
+  } else if (dense && !captureReady) {
+    capturing = true;
+    captureLen = 0;
+    for (size_t i = 0; i < CAPTURE_PRE; ++i) {
+      const schrader::Pulse& h = hist[(histIdx + i) % CAPTURE_PRE];
+      if (h.us) capture[captureLen++] = h;
+    }
+    capture[captureLen++] = p;
+  }
+  hist[histIdx] = p;
+  histIdx = (histIdx + 1) % CAPTURE_PRE;
+}
+
+// Most common width among pulses of one level, in 20 us bins (< 1 ms).
+static uint16_t dominantWidth(const schrader::Pulse* p, size_t n, uint8_t level) {
+  uint16_t bins[50] = {0};
+  for (size_t i = 0; i < n; ++i) {
+    if (p[i].level != level || p[i].us >= 1000) continue;
+    bins[p[i].us / 20]++;
+  }
+  size_t best = 0;
+  for (size_t b = 1; b < 50; ++b)
+    if (bins[b] > bins[best]) best = b;
+  return bins[best] ? (uint16_t)(best * 20 + 10) : 0;
+}
+
+static void printHistogram(const schrader::Pulse* p, size_t n) {
+  uint16_t hi[25] = {0}, lo[25] = {0};
+  for (size_t i = 0; i < n; ++i) {
+    if (p[i].us >= 500) continue;
+    (p[i].level ? hi : lo)[p[i].us / 20]++;
+  }
+  Serial.println("  width(us)   high  low");
+  for (size_t b = 0; b < 25; ++b) {
+    if (!hi[b] && !lo[b]) continue;
+    Serial.printf("  %3u-%3u    %4u %4u\n", (unsigned)(b * 20), (unsigned)(b * 20 + 19), hi[b], lo[b]);
+  }
+}
+
+static void analyzeBurst() {
+  if (!captureReady) return;
+  captureReady = false;
+  size_t n = captureLen;
+  memcpy(lastCapture, capture, n * sizeof(capture[0]));
+  lastCaptureLen = n;
+
+  uint32_t durUs = 0;
+  for (size_t i = 0; i < n; ++i) durUs += lastCapture[i].us;
+  sessionBursts++;
+  lastBurstMs = millis();
+  haveLastBurst = true;
+
+  BurstRec r = {};
+  r.uptimeS = millis() / 1000;
+  r.pulses = (uint16_t)n;
+  r.durMs = (uint16_t)(durUs / 1000);
+  r.hiUs = dominantWidth(lastCapture, n, 1);
+  r.loUs = dominantWidth(lastCapture, n, 0);
+  r.boot = (uint8_t)blog.boots;
+
+  schrader::Frame f[4];
+  size_t k = schrader::decodeRun(lastCapture, n, timing, f, 4);
+  if (k) {
+    r.decoded = 1;
+  } else {
+    schrader::Timing tuned;
+    k = schrader::autotune(lastCapture, n, &tuned, f, 4);
+    if (k) {
+      r.decoded = 2;
+      Serial.printf("autotune: half=%uus skew=%dus inverted=%d (was half=%u skew=%d inv=%d) - saved\n",
+                    tuned.halfUs, tuned.skewUs, tuned.inverted, timing.halfUs, timing.skewUs,
+                    timing.inverted);
+      timing = tuned;
+      saveTiming();
+    }
+  }
+  if (k) {
+    r.id = f[0].id;
+    r.pressureRaw = f[0].pressureRaw;
+    sessionBurstsDecoded++;
+    // With the current timing the live decoder already saw these frames;
+    // handing them over again would count as a confirming repeat in learn
+    // mode. Only frames that took autotune to recover are new.
+    if (r.decoded == 2)
+      for (size_t i = 0; i < k; ++i) handleFrame(f[i]);
+  }
+
+  Serial.printf("burst: %u pulses in %lu ms, high~%uus low~%uus -> %s\n", (unsigned)n,
+                (unsigned long)(durUs / 1000), r.hiUs, r.loUs,
+                r.decoded == 1 ? "decoded" : r.decoded == 2 ? "decoded after autotune" : "NOT decoded");
+  if (!r.decoded) {
+    printHistogram(lastCapture, n);
+    Serial.println("  (type `dump` for every width; compare with rtl_433 -A)");
+  }
+
+  blog.recs[blog.head] = r;
+  blog.head = (blog.head + 1) % LOG_LEN;
+  if (blog.count < LOG_LEN) blog.count++;
+  blog.bursts++;
+  if (r.decoded) blog.decoded++;
+  logDirty = true;
+}
+
 static void drainEdges() {
   while (ringTail != ringHead) {
     uint32_t v = ring[ringTail];
     ringTail = (ringTail + 1) & (RING - 1);
     schrader::Pulse p{(uint16_t)(v & 0xFFFF), (uint8_t)(v >> 16)};
-    if (schrader::halfUnits(p.us, timing) == 0) {
+    feedBurstDetector(p);
+    if (schrader::halfUnits(p.us, p.level, timing) == 0) {
       endRun();
       continue;
     }
@@ -379,6 +607,7 @@ class ControlCallbacks : public BLECharacteristicCallbacks {
 
 static void setupBle() {
   BLEDevice::init(DEVICE_NAME);
+  BLEDevice::setMTU(185);  // STATUS is 34 bytes; the default MTU carries 20
   server = BLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   BLEService* svc = server->createService(SERVICE_UUID);
@@ -407,13 +636,23 @@ static void setupBle() {
   BLEDevice::startAdvertising();
 }
 
-// STATUS frame, 17 bytes LE:
+// STATUS frame, 34 bytes LE (the first 17 are the original v1 layout):
 //   ver u8 | uptime_s u32 | framesDecoded u32 | framesReported u32 | overflows u32
+//   | edgesPerSec u32 | bursts u32 | burstsDecoded u32 | lastBurstAgeS u16
+//   | halfUs u16 | inverted u8
+static const size_t STATUS_LEN = 34;
 static void publishStatus() {
-  uint8_t b[17];
+  uint8_t b[STATUS_LEN];
   b[0] = PROTO_VERSION;
-  uint32_t vals[4] = {millis() / 1000, framesDecoded, framesReported, ringOverflows};
+  uint32_t vals[7] = {millis() / 1000, framesDecoded, framesReported, ringOverflows,
+                      edgesPerSec, sessionBursts, sessionBurstsDecoded};
   memcpy(b + 1, vals, sizeof(vals));
+  uint32_t age = haveLastBurst ? (millis() - lastBurstMs) / 1000 : 0xFFFF;
+  uint16_t age16 = age > 0xFFFF ? 0xFFFF : (uint16_t)age;
+  memcpy(b + 29, &age16, 2);
+  uint16_t half = timing.halfUs;
+  memcpy(b + 31, &half, 2);
+  b[33] = timing.inverted ? 1 : 0;
   statusChar->setValue(b, sizeof(b));
   if (clientConnected) statusChar->notify();
 }
@@ -439,7 +678,8 @@ static bool selfTest() {
 
 static void printHelp() {
   Serial.println("commands: list | add <hex id> | del <hex id> | learn on|off |"
-                 " raw on|off | half <us> | status | scope on|off");
+                 " raw on|off | half <us> | invert on|off | status | scope on|off |"
+                 " bursts | dump | clearlog");
 }
 
 static void handleSerial() {
@@ -481,14 +721,44 @@ static void handleSerial() {
       rawDebug = cmd == "raw on";
     } else if (cmd.startsWith("half ")) {
       timing.halfUs = (uint16_t)cmd.substring(5).toInt();
-      Serial.printf("half-bit = %u us\n", timing.halfUs);
+      timing.skewUs = 0;
+      saveTiming();
+      Serial.printf("half-bit = %u us, skew reset to 0 (saved)\n", timing.halfUs);
+    } else if (cmd == "invert on" || cmd == "invert off") {
+      timing.inverted = cmd == "invert on";
+      saveTiming();
+      Serial.printf("inverted = %d (saved)\n", timing.inverted);
+    } else if (cmd == "bursts") {
+      printLog(LOG_LEN);
+    } else if (cmd == "dump") {
+      if (!lastCaptureLen) {
+        Serial.println("no burst captured since boot");
+      } else {
+        Serial.printf("last burst, %u pulses (H=carrier on, L=gap), us:\n", (unsigned)lastCaptureLen);
+        for (size_t i = 0; i < lastCaptureLen; ++i) {
+          Serial.printf("%c%u%s", lastCapture[i].level ? 'H' : 'L', lastCapture[i].us,
+                        (i % 16 == 15) ? "\n" : " ");
+        }
+        Serial.println();
+        printHistogram(lastCapture, lastCaptureLen);
+      }
+    } else if (cmd == "clearlog") {
+      uint32_t boots = blog.boots;
+      memset(&blog, 0, sizeof(blog));
+      blog.boots = boots;
+      logDirty = true;
+      saveLogIfDue(true);
+      Serial.println("log cleared");
     } else if (cmd == "scope on" || cmd == "scope off") {
       scopeOn = cmd == "scope on";
     } else if (cmd == "status") {
-      Serial.printf("up %lus decoded=%lu reported=%lu runs=%lu overflows=%lu ble=%d\n",
+      Serial.printf("up %lus decoded=%lu reported=%lu runs=%lu bursts=%lu/%lu overflows=%lu ble=%d\n",
                     (unsigned long)(millis() / 1000), (unsigned long)framesDecoded,
                     (unsigned long)framesReported, (unsigned long)runsTried,
+                    (unsigned long)sessionBurstsDecoded, (unsigned long)sessionBursts,
                     (unsigned long)ringOverflows, clientConnected ? 1 : 0);
+      Serial.printf("timing: half=%uus skew=%dus inverted=%d\n", timing.halfUs, timing.skewUs,
+                    timing.inverted);
     } else {
       printHelp();
     }
@@ -506,21 +776,31 @@ void setup() {
 
   prefs.begin("tpms", false);
   loadConfig();
-  selfTest();
+  selfTest();  // nominal timing, before any learned timing is applied
+  loadTiming();
+  loadLog();
+  printLog(5);
+  Serial.println("  (type `bursts` for the full log)");
   setupBle();
 
+  // Start the density window "sparse" so boot is not mistaken for a burst.
+  for (size_t i = 0; i < BURST_EDGES; ++i) winDur[i] = 0xFFFF;
+  winSum = (uint32_t)BURST_EDGES * 0xFFFF;
   lastEdgeUs = micros();
   attachInterrupt(digitalPinToInterrupt(RX_PIN), onEdge, CHANGE);
-  Serial.printf("listening on GPIO %d, %u ids allowlisted, learn=%d\n", RX_PIN,
-                (unsigned)allowCount, learnMode);
+  Serial.printf("listening on GPIO %d, %u ids allowlisted, learn=%d, half=%uus skew=%dus inv=%d\n",
+                RX_PIN, (unsigned)allowCount, learnMode, timing.halfUs, timing.skewUs,
+                timing.inverted);
   printHelp();
 }
 
 void loop() {
   drainEdges();
+  analyzeBurst();
   handleSerial();
   applyPendingConfig();
   serviceReplay();
+  saveLogIfDue(false);
 
   if (advertiseRequested) {
     advertiseRequested = false;
@@ -532,13 +812,16 @@ void loop() {
   // A connected RX470C chatters hundreds to thousands of edges/s on noise
   // alone; 0 means nothing is reaching the pin.
   static uint32_t lastScope = 0, lastEdges = 0;
-  if (scopeOn && millis() - lastScope >= 1000) {
+  if (millis() - lastScope >= 1000) {
     uint32_t e = edgeCount;
-    Serial.printf("scope: %lu edges/s, pin=%d, runs=%lu, decoded=%lu\n",
-                  (unsigned long)(e - lastEdges), digitalRead(RX_PIN),
-                  (unsigned long)runsTried, (unsigned long)framesDecoded);
+    edgesPerSec = e - lastEdges;
     lastEdges = e;
     lastScope = millis();
+    if (scopeOn) {
+      Serial.printf("scope: %lu edges/s, pin=%d, runs=%lu, bursts=%lu, decoded=%lu\n",
+                    (unsigned long)edgesPerSec, digitalRead(RX_PIN), (unsigned long)runsTried,
+                    (unsigned long)sessionBursts, (unsigned long)framesDecoded);
+    }
   }
 
   static uint32_t lastStatus = 0;

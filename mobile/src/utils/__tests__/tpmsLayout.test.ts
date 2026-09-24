@@ -8,7 +8,7 @@ import {
   type TpmsConfig,
 } from '../../config/tpmsConfig';
 import type { TpmsReading } from '../../services/tpmsProtocol';
-import { STALE_MS, formatAge, resolveTires, tireStatus } from '../tpmsLayout';
+import { STALE_MS, formatAge, receiverHealth, resolveTires, tireStatus } from '../tpmsLayout';
 
 const NOW = 10_000_000;
 
@@ -100,6 +100,41 @@ describe('resolveTires', () => {
     expect(lf.stale).toBe(true);
     expect(lf.status).toBe('lowCrit');
     expect(lf.reading!.psi).toBe(40);
+  });
+});
+
+describe('receiverHealth', () => {
+  const base = { uptimeS: 60, decoded: 0, reported: 0, overflows: 0 };
+  const radio = { edgesPerSec: 800, bursts: 0, burstsDecoded: 0, lastBurstAgeS: null, halfUs: 120, inverted: false };
+
+  it('says so when the phone is not connected', () => {
+    expect(receiverHealth(null, false).tone).toBe('muted');
+  });
+
+  it('handles firmware without radio stats', () => {
+    expect(receiverHealth(base, true).text).toMatch(/update its firmware/);
+  });
+
+  it('flags a silent DATA line as a wiring fault', () => {
+    expect(receiverHealth({ ...base, radio: { ...radio, edgesPerSec: 0 } }, true).tone).toBe('bad');
+  });
+
+  it('is ok while listening with nothing heard yet', () => {
+    const h = receiverHealth({ ...base, radio }, true);
+    expect(h.tone).toBe('ok');
+    expect(h.text).toBe('RX 800 edges/s · 0 bursts · 0 decoded · none yet');
+  });
+
+  it('warns when bursts arrive but none decode', () => {
+    const h = receiverHealth({ ...base, radio: { ...radio, bursts: 3, lastBurstAgeS: 40 } }, true);
+    expect(h.tone).toBe('warn');
+    expect(h.text).toBe('RX 800 edges/s · 3 bursts · 0 decoded · last 40s ago');
+  });
+
+  it('is ok once bursts decode', () => {
+    const h = receiverHealth({ ...base, radio: { ...radio, bursts: 1, burstsDecoded: 1, lastBurstAgeS: 3 } }, true);
+    expect(h.tone).toBe('ok');
+    expect(h.text).toContain('1 burst ·');
   });
 });
 

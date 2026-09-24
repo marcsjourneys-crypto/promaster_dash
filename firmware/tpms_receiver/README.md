@@ -35,8 +35,12 @@ Partition Scheme → **Huge APP**.
 | `add 05E671A` / `del 05E671A` | Edit the allowlist (saved to flash) |
 | `learn on` / `learn off` | Also forward unknown Schrader IDs (must repeat twice) |
 | `raw on` / `raw off` | Print ignored frames and failed decode runs |
-| `half 120` | Manchester half-bit in µs. Tune this if nothing decodes |
-| `status` | Uptime and counters |
+| `half 120` | Manchester half-bit in µs (resets skew; saved). Normally set by autotune |
+| `invert on` / `invert off` | Treat DATA low as carrier-on (saved). Normally set by autotune |
+| `status` | Uptime, counters, current timing |
+| `bursts` | The persistent burst log: what it heard, even across power cycles |
+| `dump` | Every pulse width of the last burst, plus a width histogram |
+| `clearlog` | Empty the burst log |
 | `scope on` / `scope off` | Once a second: edges/s on the DATA pin and its level. The wiring check (see below) |
 
 Output lines mirror rtl_433, so you can run both side by side:
@@ -56,14 +60,36 @@ Type `scope on`. Every second it prints edges/s on GPIO 27 and the pin level.
 | `0 edges/s`, pin stuck at 0 or 1 | Nothing reaching GPIO 27: check DATA wire, VCC, GND |
 | Edges drop to near 0 when you unplug the DATA wire | Confirms the count came from the receiver |
 
+## Burst detection and autotune
+
+The receiver spots tire transmissions by **edge density**, not by the
+decoder's timing. About 60 edges packed into 25 ms is a burst, while noise
+runs at roughly 1 edge per ms. So it records a burst even when it can't read
+it. For each one it:
+
+1. Tries the current timing.
+2. If that fails, sweeps half-bit width, high/low skew and polarity. When one
+   decodes, the receiver adopts it and saves it to flash, then prints:
+   `autotune: half=…us skew=…us inverted=…`
+3. Prints a `burst:` line. If the burst didn't decode, it adds a histogram of
+   pulse widths.
+4. Appends a summary to a 16-entry log in flash, which survives unplugging.
+   After a drive, plug in and type `bursts`. The boot banner also shows the
+   last 5 entries.
+
+On the phone, the TIRES screen shows the same thing in one line:
+`RX 800 edges/s · 3 bursts · 0 decoded · last 40s ago`. It turns amber when
+bursts are heard but none decode.
+
 ## First bring-up (go/no-go for the RX470C)
 
 1. Run `rtl_433 -R 60 -F json` on the RTL-SDR next to the ESP32.
 2. Wake the sensors by driving, or by letting a little air out of a tire.
 3. Every burst rtl_433 prints should also appear on the ESP32 Serial with the
    same ID, kPa and °C.
-4. If rtl_433 decodes but the ESP32 does not: `raw on`, then try `half 110` …
-   `half 135`. `rtl_433 -A` shows the real pulse widths.
+4. If rtl_433 decodes but the ESP32 only logs `burst: … NOT decoded`, type
+   `dump` and paste it next to rtl_433's `-A` pulse analysis for the same
+   transmission. The widths show what the RX470C is doing to the signal.
 5. If it still fails, the RX470C's slicer can't pass 120 µs pulses. Swap in a
    CC1101 in async OOK mode on GDO0. The decoder is unchanged.
 

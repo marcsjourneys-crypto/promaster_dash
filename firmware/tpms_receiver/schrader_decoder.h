@@ -42,14 +42,20 @@ struct Pulse {
   uint8_t level;  // 1 = carrier on (DATA high), 0 = off
 };
 
+// How the receiver's output maps onto the nominal protocol timing. A
+// superhet's data slicer typically stretches carrier-on pulses and shrinks
+// the gaps by the same amount; `skewUs` undoes that before classifying.
 struct Timing {
   uint16_t halfUs = 120;  // nominal Manchester half-bit
+  int16_t skewUs = 0;     // subtracted from highs, added to lows (raw levels)
+  bool inverted = false;  // DATA low = carrier on
 };
 
 uint8_t crc8(const uint8_t* data, size_t len);
 
 // 1 or 2 half-bits for a duration within tolerance, 0 if out of range.
-uint8_t halfUnits(uint16_t us, const Timing& t);
+// `rawLevel` is the pin level during the pulse, before any inversion.
+uint8_t halfUnits(uint16_t us, uint8_t rawLevel, const Timing& t);
 
 // Validate preamble + CRC on the 8 bytes after the sync nibble.
 bool parseBytes(const uint8_t b[8], Frame* out);
@@ -57,6 +63,12 @@ bool parseBytes(const uint8_t b[8], Frame* out);
 // Decode every valid frame in a run of in-tolerance pulses (two sensors can
 // land in one run). Returns how many were written to `out`.
 size_t decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out, size_t maxOut);
+
+// Sweep half-bit width, skew and polarity over a captured burst and return
+// how many frames the best timing decodes (0 if none). The best timing is
+// the one decoding the most frames, preferring small skew, a half-bit near
+// 120 us and normal polarity. Fills `*best` and `out` on success.
+size_t autotune(const Pulse* p, size_t n, Timing* best, Frame* out, size_t maxOut);
 
 // Build the on-air pulse sequence for a frame. Used by the self-test and the
 // host test; the leading and trailing silence is not emitted.

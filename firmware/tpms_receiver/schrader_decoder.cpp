@@ -13,13 +13,16 @@ uint8_t crc8(const uint8_t* data, size_t len) {
   return crc;
 }
 
-uint8_t halfUnits(uint16_t us, const Timing& t) {
-  // Wide windows: superhet slicers stretch highs and shrink lows. The split at
-  // 1.5 half-bits is the only boundary that matters.
+uint8_t halfUnits(uint16_t us, uint8_t rawLevel, const Timing& t) {
+  // Undo the slicer's skew, then classify. The split at 1.5 half-bits is the
+  // only boundary that matters; the outer bounds just reject noise.
+  int32_t c = (int32_t)us + (rawLevel ? -t.skewUs : t.skewUs);
+  if (c <= 0) return 0;
+  const uint32_t u = (uint32_t)c;
   const uint32_t h = t.halfUs;
-  if (us * 2u < h) return 0;           // < 0.5 T
-  if (us * 2u < h * 3u) return 1;      // < 1.5 T
-  if (us * 5u < h * 13u) return 2;     // < 2.6 T
+  if (u * 2u < h) return 0;           // < 0.5 T
+  if (u * 2u < h * 3u) return 1;      // < 1.5 T
+  if (u * 5u < h * 13u) return 2;     // < 2.6 T
   return 0;
 }
 
@@ -57,9 +60,10 @@ size_t decodeFrom(const Pulse* p, size_t n, const Timing& t, uint8_t* bits) {
   };
 
   for (size_t i = 0; i < n && ok; ++i) {
-    uint8_t u = halfUnits(p[i].us, t);
+    uint8_t u = halfUnits(p[i].us, p[i].level, t);
     if (u == 0) break;
-    for (uint8_t k = 0; k < u && ok; ++k) push(p[i].level);
+    uint8_t level = p[i].level ^ (t.inverted ? 1 : 0);
+    for (uint8_t k = 0; k < u && ok; ++k) push(level);
   }
   // A frame ending on a high half is completed by the silence after it.
   if (ok && pending == 1) push(0);
@@ -75,8 +79,9 @@ static const size_t kMinFramePulses = 60;
 size_t decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out, size_t maxOut) {
   uint8_t bits[kMaxBits];
   size_t found = 0;
+  const uint8_t on = t.inverted ? 0 : 1;
   for (size_t s = 0; s < n && found < maxOut; ++s) {
-    if (!run[s].level) continue;
+    if (run[s].level != on) continue;
     size_t nb = decodeFrom(run + s, n - s, t, bits);
     if (nb < kFrameBits) continue;
     bool hit = false;
@@ -96,6 +101,34 @@ size_t decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out, size_t
     }
   }
   return found;
+}
+
+size_t autotune(const Pulse* p, size_t n, Timing* best, Frame* out, size_t maxOut) {
+  Frame tmp[8];
+  if (maxOut > 8) maxOut = 8;
+  size_t bestN = 0;
+  int32_t bestCost = 0;
+  for (int inv = 0; inv < 2; ++inv) {
+    for (int half = 80; half <= 200; half += 10) {
+      for (int skew = -90; skew <= 90; skew += 15) {
+        Timing t;
+        t.halfUs = (uint16_t)half;
+        t.skewUs = (int16_t)skew;
+        t.inverted = inv != 0;
+        size_t k = decodeRun(p, n, t, tmp, maxOut);
+        if (k == 0) continue;
+        int32_t cost = 2 * (skew < 0 ? -skew : skew) + (half > 120 ? half - 120 : 120 - half) +
+                       50 * inv;
+        if (k > bestN || (k == bestN && cost < bestCost)) {
+          bestN = k;
+          bestCost = cost;
+          *best = t;
+          for (size_t i = 0; i < k; ++i) out[i] = tmp[i];
+        }
+      }
+    }
+  }
+  return bestN;
 }
 
 size_t encode(const Frame& f, const Timing& t, Pulse* out, size_t max) {

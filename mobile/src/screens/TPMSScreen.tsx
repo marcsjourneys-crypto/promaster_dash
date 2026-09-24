@@ -6,7 +6,7 @@ import { colors, fonts } from '../config/theme';
 import { StatusPill } from '../components/StatusPill';
 import { VanTopView } from '../components/VanTopView';
 import { useVehicleStore } from '../store/vehicleStore';
-import { resolveTires } from '../utils/tpmsLayout';
+import { receiverHealth, resolveTires, type HealthTone } from '../utils/tpmsLayout';
 import type { Units } from '../utils/units';
 
 interface TPMSScreenProps {
@@ -15,6 +15,13 @@ interface TPMSScreenProps {
   units: Units;
 }
 
+const HEALTH_COLOR: Record<HealthTone, string> = {
+  ok: colors.gpsOk,
+  warn: 'rgb(245, 160, 40)',
+  bad: 'rgb(240, 80, 60)',
+  muted: 'rgba(150, 145, 135, 0.78)',
+};
+
 /** Ages and staleness are time-based, so re-render even with no new data. */
 const TICK_MS = 10_000;
 
@@ -22,6 +29,7 @@ export function TPMSScreen({ onBack, onConfigure, units }: TPMSScreenProps) {
   const config = useVehicleStore((s) => s.tpmsConfig);
   const readings = useVehicleStore((s) => s.tpmsReadings);
   const connected = useVehicleStore((s) => s.tpmsConnected);
+  const status = useVehicleStore((s) => s.tpmsStatus);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -45,6 +53,7 @@ export function TPMSScreen({ onBack, onConfigure, units }: TPMSScreenProps) {
   }
 
   const receiverValue = connected ? 'ON' : config.receiverId ? '--' : 'NOT PAIRED';
+  const health = receiverHealth(status, connected);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -62,6 +71,12 @@ export function TPMSScreen({ onBack, onConfigure, units }: TPMSScreenProps) {
         <StatusPill label="RECEIVER" value={receiverValue} />
         <StatusPill label="UNIT" value={units.pressureLabel} />
       </View>
+
+      {config.receiverId && (
+        <Text style={[styles.health, { color: HEALTH_COLOR[health.tone] }]} numberOfLines={1} adjustsFontSizeToFit>
+          {health.text}
+        </Text>
+      )}
 
       <View style={styles.van}>
         <VanTopView tires={tires} units={units} />
@@ -106,6 +121,12 @@ const styles = StyleSheet.create({
   },
   iconBtnText: { color: colors.textPrimary, fontSize: fonts.sizeLg },
   pillRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16 },
+  health: {
+    fontSize: fonts.sizeXs,
+    fontWeight: '800',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   van: { flex: 1, paddingHorizontal: 8, paddingVertical: 8 },
   targets: {
     color: 'rgba(150, 145, 135, 0.78)',

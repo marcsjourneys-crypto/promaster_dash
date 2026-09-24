@@ -27,6 +27,7 @@ import {
   decodeConfigFrame,
   decodeStatusFrame,
   encodeConfigFrame,
+  type TpmsReceiverStatus,
 } from './tpmsProtocol';
 
 const CONNECT_TIMEOUT_MS = 15_000;
@@ -48,6 +49,10 @@ let generation = 0;
 let subs: Subscription[] = [];
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = BACKOFF_MIN_MS;
+let lastLoggedBursts = -1;
+let lastStatusLog = 0;
+/** How often a routine STATUS line goes into the debug log. */
+const STATUS_LOG_MS = 30_000;
 
 const store = () => useVehicleStore.getState();
 
@@ -220,7 +225,9 @@ async function connectReceiver(id: string): Promise<void> {
     subs.push(mgr.monitorCharacteristicForDevice(id, TPMS_SERVICE_UUID, TPMS_STATUS_UUID, (err, ch) => {
       if (err || !ch?.value) return;
       const status = decodeStatusFrame(base64ToBytes(ch.value));
-      if (status) store().setTpmsStatus(status);
+      if (!status) return;
+      store().setTpmsStatus(status);
+      logStatus(status);
     }));
 
     const cfgChar = await mgr.readCharacteristicForDevice(id, TPMS_SERVICE_UUID, TPMS_CONFIG_UUID);
@@ -244,6 +251,29 @@ async function connectReceiver(id: string): Promise<void> {
     scheduleReconnect(id);
   } finally {
     if (gen === generation && pendingId === id) pendingId = null;
+  }
+}
+
+/** Leave a trail in the debug log so a drive can be reviewed afterwards. */
+function logStatus(status: TpmsReceiverStatus): void {
+  const r = status.radio;
+  if (!r) return;
+  if (r.bursts !== lastLoggedBursts) {
+    if (lastLoggedBursts >= 0 && r.bursts > lastLoggedBursts) {
+      dlog(
+        `TPMS: receiver heard burst #${r.bursts} (${r.burstsDecoded} decoded so far,` +
+        ` timing ${r.halfUs}us${r.inverted ? ' inverted' : ''})`,
+      );
+    }
+    lastLoggedBursts = r.bursts;
+  }
+  const now = Date.now();
+  if (now - lastStatusLog >= STATUS_LOG_MS) {
+    lastStatusLog = now;
+    dlog(
+      `TPMS: receiver up ${status.uptimeS}s, ${r.edgesPerSec} edges/s,` +
+      ` bursts ${r.burstsDecoded}/${r.bursts} decoded, readings sent ${status.reported}`,
+    );
   }
 }
 

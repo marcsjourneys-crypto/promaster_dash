@@ -103,6 +103,27 @@ describe('STATUS frames', () => {
     b[13] = 0;       // overflows
     expect(decodeStatusFrame(b)).toEqual({ uptimeS: 100, decoded: 12, reported: 4, overflows: 0 });
   });
+
+  it('decodes the radio diagnostics appended by newer firmware', () => {
+    const b = new Uint8Array(34);
+    b[0] = 1;
+    b[17] = 0x20; b[18] = 0x03;   // edgesPerSec 800
+    b[21] = 3;                    // bursts
+    b[25] = 1;                    // burstsDecoded
+    b[29] = 40;                   // lastBurstAgeS
+    b[31] = 135;                  // halfUs
+    b[33] = 1;                    // inverted
+    expect(decodeStatusFrame(b)!.radio).toEqual({
+      edgesPerSec: 800, bursts: 3, burstsDecoded: 1, lastBurstAgeS: 40, halfUs: 135, inverted: true,
+    });
+  });
+
+  it('reports no last burst as null', () => {
+    const b = new Uint8Array(34);
+    b[0] = 1;
+    b[29] = 0xff; b[30] = 0xff;
+    expect(decodeStatusFrame(b)!.radio!.lastBurstAgeS).toBeNull();
+  });
 });
 
 it('base64 helpers round-trip binary bytes', () => {

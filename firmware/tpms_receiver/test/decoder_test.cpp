@@ -134,6 +134,81 @@ static void test_two_sensors_in_one_run() {
   CHECK(got[1].samePayload(b));
 }
 
+// What the RX470C might do to a burst: stretch highs, shrink lows, invert,
+// or run at a different bit rate. The default timing fails; autotune must
+// find a timing that decodes, and never "decode" pure noise.
+static std::vector<Pulse> distort(std::vector<Pulse> p, int skew, bool invert) {
+  for (auto& x : p) {
+    x.us = (uint16_t)(x.us + (x.level ? skew : -skew));
+    if (invert) x.level ^= 1;
+  }
+  return p;
+}
+
+static void test_autotune_skewed_slicer() {
+  Timing nominal;
+  Frame s = make(0x05E671A, 447.5f, 22);
+  auto p = distort(air(s, nominal), 60, false);
+  Frame got[2]{};
+  CHECK(decodeRun(p.data(), p.size(), nominal, got, 2) == 0);
+  Timing best;
+  CHECK(autotune(p.data(), p.size(), &best, got, 2) == 1);
+  CHECK(got[0].samePayload(s));
+  CHECK(best.skewUs > 0);  // it corrected in the right direction
+  CHECK(!best.inverted);
+  CHECK(decodeRun(p.data(), p.size(), best, got, 2) == 1);  // adopted timing works
+}
+
+static void test_autotune_inverted() {
+  Timing nominal;
+  Frame s = make(0x00FBFF7, 467.5f, 24);
+  auto p = distort(air(s, nominal), 0, true);
+  // An inverted frame is preceded by carrier-off-as-high silence; model the
+  // leading edge the receiver would record.
+  p.insert(p.begin(), Pulse{120, 1});
+  Frame got[2]{};
+  Timing best;
+  CHECK(autotune(p.data(), p.size(), &best, got, 2) == 1);
+  CHECK(got[0].samePayload(s));
+  CHECK(best.inverted);
+}
+
+static void test_autotune_other_bitrate() {
+  Timing t140;
+  t140.halfUs = 140;
+  Frame s = make(0x00FA4D3, 465.0f, 25);
+  auto p = air(s, t140);
+  Frame got[2]{};
+  Timing best;
+  CHECK(autotune(p.data(), p.size(), &best, got, 2) == 1);
+  CHECK(got[0].samePayload(s));
+  CHECK(best.halfUs >= 120 && best.halfUs <= 160);
+}
+
+static void test_autotune_in_noise_and_not_on_noise() {
+  Timing nominal;
+  Frame s = make(0x05E670D, 445.0f, 25);
+  std::srand(99);
+  std::vector<Pulse> cap;
+  for (int i = 0; i < 40; ++i) cap.push_back(Pulse{(uint16_t)(300 + std::rand() % 2000), (uint8_t)(i & 1)});
+  auto f = distort(air(s, nominal), 45, false);
+  cap.insert(cap.end(), f.begin(), f.end());
+  for (int i = 0; i < 40; ++i) cap.push_back(Pulse{(uint16_t)(300 + std::rand() % 2000), (uint8_t)(i & 1)});
+  Frame got[2]{};
+  Timing best;
+  CHECK(autotune(cap.data(), cap.size(), &best, got, 2) == 1);
+  CHECK(got[0].samePayload(s));
+
+  int hits = 0;
+  for (int trial = 0; trial < 50; ++trial) {
+    std::vector<Pulse> noise(300);
+    for (size_t i = 0; i < noise.size(); ++i)
+      noise[i] = Pulse{(uint16_t)(40 + std::rand() % 400), (uint8_t)(i & 1)};
+    if (autotune(noise.data(), noise.size(), &best, got, 2)) ++hits;
+  }
+  CHECK(hits == 0);
+}
+
 int main() {
   test_crc_reference_frame();
   test_bad_crc_and_preamble_rejected();
@@ -143,6 +218,10 @@ int main() {
   test_random_noise_never_decodes();
   test_truncated_frame_rejected();
   test_two_sensors_in_one_run();
+  test_autotune_skewed_slicer();
+  test_autotune_inverted();
+  test_autotune_other_bitrate();
+  test_autotune_in_noise_and_not_on_noise();
   if (failures) {
     std::printf("%d failure(s)\n", failures);
     return 1;

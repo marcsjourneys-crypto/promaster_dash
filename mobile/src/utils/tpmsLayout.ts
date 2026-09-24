@@ -12,7 +12,7 @@ import {
   type TirePosition,
   type TpmsConfig,
 } from '../config/tpmsConfig';
-import type { TpmsReading } from '../services/tpmsProtocol';
+import type { TpmsReading, TpmsReceiverStatus } from '../services/tpmsProtocol';
 
 /** Pressure verdict. `hot` only applies when the pressure itself is fine. */
 export type TireStatus = 'ok' | 'lowWarn' | 'lowCrit' | 'high' | 'hot' | 'noData';
@@ -80,6 +80,32 @@ export function resolveTires(
     .filter((r) => !placed.has(r.id))
     .sort((a, b) => a.id.localeCompare(b.id));
   return { tires, unassigned };
+}
+
+export type HealthTone = 'ok' | 'warn' | 'bad' | 'muted';
+
+export interface ReceiverHealth {
+  text: string;
+  tone: HealthTone;
+}
+
+/**
+ * One line answering "is the receiver hearing anything?" for the TPMS screen.
+ * `warn` is the case the first van test hit: bursts arrive but none decode.
+ */
+export function receiverHealth(status: TpmsReceiverStatus | null, connected: boolean): ReceiverHealth {
+  if (!connected) return { text: 'Receiver not connected', tone: 'muted' };
+  const radio = status?.radio;
+  if (!radio) return { text: 'Receiver connected (update its firmware for radio stats)', tone: 'muted' };
+  if (radio.edgesPerSec === 0) {
+    return { text: 'RX silent: 0 edges/s. Check the RX470C wiring', tone: 'bad' };
+  }
+  const last = radio.lastBurstAgeS === null ? 'none yet' : `last ${formatAge(radio.lastBurstAgeS * 1000)} ago`;
+  const text =
+    `RX ${radio.edgesPerSec} edges/s · ${radio.bursts} burst${radio.bursts === 1 ? '' : 's'}` +
+    ` · ${radio.burstsDecoded} decoded · ${last}`;
+  if (radio.bursts > 0 && radio.burstsDecoded === 0) return { text, tone: 'warn' };
+  return { text, tone: 'ok' };
 }
 
 /** "now", "45s", "12m", "3h", "2d" */

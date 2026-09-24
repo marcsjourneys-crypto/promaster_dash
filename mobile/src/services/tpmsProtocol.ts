@@ -50,6 +50,22 @@ export interface TpmsReceiverStatus {
   decoded: number;
   reported: number;
   overflows: number;
+  /** Radio diagnostics — absent from receivers flashed before 2026-09-24. */
+  radio?: TpmsRadioStatus;
+}
+
+export interface TpmsRadioStatus {
+  /** Edges per second on the RX470C's DATA pin: ~300-1000 is noise, 0 is a wiring fault. */
+  edgesPerSec: number;
+  /** Tire-burst-shaped signals heard since the receiver booted. */
+  bursts: number;
+  /** Of those, how many decoded into a reading. */
+  burstsDecoded: number;
+  /** Seconds since the last burst, null if none since boot. */
+  lastBurstAgeS: number | null;
+  /** Timing the decoder is using (auto-tuned). */
+  halfUs: number;
+  inverted: boolean;
 }
 
 export function formatSensorId(n: number): string {
@@ -124,13 +140,29 @@ export function decodeConfigFrame(b: Uint8Array): TpmsReceiverConfig | null {
   return { ids, learn: b[1] !== 0 };
 }
 
-/** STATUS: ver, uptime_s, decoded, reported, overflows (all u32). */
+/**
+ * STATUS: ver, uptime_s, decoded, reported, overflows (all u32); then, from
+ * firmware of 2026-09-24, edgesPerSec, bursts, burstsDecoded (u32),
+ * lastBurstAgeS, halfUs (u16), inverted (u8) — 34 bytes in all.
+ */
 export function decodeStatusFrame(b: Uint8Array): TpmsReceiverStatus | null {
   if (b.length < 17 || b[0] !== PROTO_VERSION) return null;
-  return {
+  const status: TpmsReceiverStatus = {
     uptimeS: u32(b, 1),
     decoded: u32(b, 5),
     reported: u32(b, 9),
     overflows: u32(b, 13),
   };
+  if (b.length >= 34) {
+    const age = u16(b, 29);
+    status.radio = {
+      edgesPerSec: u32(b, 17),
+      bursts: u32(b, 21),
+      burstsDecoded: u32(b, 25),
+      lastBurstAgeS: age === 0xffff ? null : age,
+      halfUs: u16(b, 31),
+      inverted: b[33] !== 0,
+    };
+  }
+  return status;
 }
