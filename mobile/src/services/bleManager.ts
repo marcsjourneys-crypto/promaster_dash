@@ -50,6 +50,21 @@ function acquireLock(): { promise: Promise<void>; release: () => void } {
   return { promise, release: release! };
 }
 
+// iOS allows one scan per BleManager and stopDeviceScan() is global. The OBD
+// scan and the TPMS receiver pairing scan share it, so each scan holds a token
+// and only stops the scan if no newer one has started since.
+let scanGeneration = 0;
+
+/** Claim the shared BLE scan. Pass the token to stopScanIfOwner(). */
+export function claimScan(): number {
+  return ++scanGeneration;
+}
+
+/** Stop scanning unless a newer scan has taken over. */
+export function stopScanIfOwner(token: number): void {
+  if (token === scanGeneration) initBLE().stopDeviceScan();
+}
+
 export interface ScannedDevice {
   id: string;
   name: string | null;
@@ -72,7 +87,7 @@ export async function isBLEReady(): Promise<boolean> {
 }
 
 /** Wait for BLE to be powered on (up to timeoutMs). */
-async function waitForPoweredOn(mgr: BleManager, timeoutMs = 5000): Promise<boolean> {
+export async function waitForPoweredOn(mgr: BleManager, timeoutMs = 5000): Promise<boolean> {
   const state = await mgr.state();
   dlog(`BLE: Current state = ${state}`);
   if (state === State.PoweredOn) return true;
@@ -108,6 +123,7 @@ export function scanForDevices(
   const mgr = initBLE();
   const seen = new Set<string>();
   let stopped = false;
+  const scanToken = claimScan();
 
   dlog('BLE: Waiting for Bluetooth to be ready...');
 
@@ -176,14 +192,14 @@ export function scanForDevices(
       } else {
         dlog(`BLE: Scan complete (${durationMs / 1000}s). Saw ${seen.size} devices total.`);
       }
-      mgr.stopDeviceScan();
+      stopScanIfOwner(scanToken);
     }, durationMs);
   });
 
   // Return cleanup function
   return () => {
     stopped = true;
-    mgr.stopDeviceScan();
+    stopScanIfOwner(scanToken);
   };
 }
 

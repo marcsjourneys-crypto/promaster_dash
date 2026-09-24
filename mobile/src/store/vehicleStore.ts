@@ -14,8 +14,11 @@ import {
   VOLT_HIGH,
 } from '../models/types';
 import { formatCodes } from '../data/dtcLookup';
-import type { TempUnit } from '../config/settings';
+import type { TempUnit, PressureUnit } from '../config/settings';
 import { makeUnits } from '../utils/units';
+import { DEFAULT_TPMS_CONFIG, POSITION_LABELS, type TpmsConfig } from '../config/tpmsConfig';
+import type { TpmsReading, TpmsReceiverStatus } from '../services/tpmsProtocol';
+import { resolveTires, type TireView } from '../utils/tpmsLayout';
 
 export type AlertPriority = 'none' | 'warning' | 'critical';
 
@@ -72,6 +75,15 @@ export interface VehicleStore extends OBDData {
 
   /** Temperature unit for alert text — display only, thresholds stay in °F. */
   tempUnit: TempUnit;
+  /** Pressure unit for tire alert text — thresholds stay in psi. */
+  pressureUnit: PressureUnit;
+
+  // TPMS (433 MHz receiver over BLE — separate from the OBD link)
+  tpmsReadings: Record<string, TpmsReading>;
+  tpmsConfig: TpmsConfig;
+  tpmsConnected: boolean;
+  tpmsLearnMode: boolean;
+  tpmsStatus: TpmsReceiverStatus | null;
 
   // Mode 01 PID discovery (for hiding unsupported gauge cards)
   supportedMode01Pids: Set<string>;
@@ -90,6 +102,12 @@ export interface VehicleStore extends OBDData {
   computeAlert: () => void;
   setSupportedMode01Pids: (pids: Set<string>) => void;
   setTempUnit: (unit: TempUnit) => void;
+  setPressureUnit: (unit: PressureUnit) => void;
+  updateTpms: (reading: TpmsReading) => void;
+  setTpmsConfig: (config: TpmsConfig) => void;
+  setTpmsConnected: (connected: boolean) => void;
+  setTpmsLearnMode: (learn: boolean) => void;
+  setTpmsStatus: (status: TpmsReceiverStatus | null) => void;
 }
 
 export const useVehicleStore = create<VehicleStore>((set, get) => ({
@@ -131,6 +149,12 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   bleConnected: false,
   nightMode: false,
   tempUnit: 'F',
+  pressureUnit: 'psi',
+  tpmsReadings: {},
+  tpmsConfig: DEFAULT_TPMS_CONFIG,
+  tpmsConnected: false,
+  tpmsLearnMode: false,
+  tpmsStatus: null,
   supportedMode01Pids: new Set<string>(),
   mode01DiscoveryDone: false,
 
@@ -182,8 +206,12 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   computeAlert: () => {
     const s = get();
     // Thresholds below stay in °F; only the message text is converted.
-    const u = makeUnits({ tempUnit: s.tempUnit, speedUnit: 'mph' });
+    const u = makeUnits({ tempUnit: s.tempUnit, speedUnit: 'mph', pressureUnit: s.pressureUnit });
     const t = (f: number) => `${u.temp(f)}${u.tempLabel}`;
+    const p = (tire: TireView) => `${u.pressure(tire.reading!.psi)} ${u.pressureLabel}`;
+    // Unassigned sensors never alert: without a wheel there is no target.
+    const tires = Object.values(resolveTires(s.tpmsConfig, s.tpmsReadings, Date.now()).tires);
+    const tireWith = (status: TireView['status']) => tires.find((x) => x.status === status);
 
     const fireAlert = (message: string, priority: AlertPriority, severity: 'warning' | 'critical') => {
       // Push to history only when the message changes (avoid duplicate entries)
@@ -225,6 +253,11 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
       fireAlert(`OIL TEMP CRITICAL: ${t(s.oilTempF)}`, 'critical', 'critical');
       return;
     }
+    const flat = tireWith('lowCrit');
+    if (flat) {
+      fireAlert(`TIRE LOW: ${POSITION_LABELS[flat.position].toUpperCase()} ${p(flat)}`, 'critical', 'critical');
+      return;
+    }
 
     // Priority 3: Warnings
     if (s.transF !== null && s.transF >= TRANS_WARN) {
@@ -241,6 +274,21 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
     }
     if (s.oilTempF !== null && s.oilTempF >= 250) {
       fireAlert(`Oil temp warning: ${t(s.oilTempF)}`, 'warning', 'warning');
+      return;
+    }
+    const soft = tireWith('lowWarn');
+    if (soft) {
+      fireAlert(`Tire low: ${POSITION_LABELS[soft.position]} ${p(soft)}`, 'warning', 'warning');
+      return;
+    }
+    const high = tireWith('high');
+    if (high) {
+      fireAlert(`Tire pressure high: ${POSITION_LABELS[high.position]} ${p(high)}`, 'warning', 'warning');
+      return;
+    }
+    const hot = tireWith('hot');
+    if (hot) {
+      fireAlert(`Tire hot: ${POSITION_LABELS[hot.position]} ${t(hot.reading!.tempF)}`, 'warning', 'warning');
       return;
     }
     if (s.intakeAirF !== null && s.intakeAirF >= 180) {
@@ -269,4 +317,25 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
   setSupportedMode01Pids: (pids) => set({ supportedMode01Pids: pids, mode01DiscoveryDone: true }),
 
   setTempUnit: (unit) => set({ tempUnit: unit }),
+
+  setPressureUnit: (unit) => set({ pressureUnit: unit }),
+
+  updateTpms: (reading) => {
+    const prev = get().tpmsReadings[reading.id];
+    // A cache replay after reconnect can be older than what we already hold.
+    if (prev && prev.ts > reading.ts) return;
+    set((s) => ({ tpmsReadings: { ...s.tpmsReadings, [reading.id]: reading } }));
+    get().computeAlert();
+  },
+
+  setTpmsConfig: (config) => {
+    set({ tpmsConfig: config });
+    get().computeAlert();
+  },
+
+  setTpmsConnected: (connected) => set({ tpmsConnected: connected }),
+
+  setTpmsLearnMode: (learn) => set({ tpmsLearnMode: learn }),
+
+  setTpmsStatus: (status) => set({ tpmsStatus: status }),
 }));

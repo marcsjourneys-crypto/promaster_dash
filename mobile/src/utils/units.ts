@@ -6,9 +6,10 @@
  * touches recorded data or alert calibration.
  *
  * Distance and elevation follow `speedUnit`: kph implies km/metres.
+ * Pressure (tires) is stored in psi and has its own unit preference.
  */
 
-import type { TempUnit, SpeedUnit } from '../config/settings';
+import type { TempUnit, SpeedUnit, PressureUnit } from '../config/settings';
 
 /** Registry unit string that marks a gauge as a temperature. */
 const TEMP_UNIT_F = '°F';
@@ -35,16 +36,27 @@ export function convertElevation(ft: number, unit: SpeedUnit): number {
   return unit === 'kph' ? ft * 0.3048 : ft;
 }
 
+/** psi -> target pressure unit. */
+export function convertPressure(psi: number, unit: PressureUnit): number {
+  if (unit === 'kPa') return psi * 6.894757;
+  if (unit === 'bar') return psi * 0.06894757;
+  return psi;
+}
+
 export interface UnitPrefs {
   tempUnit: TempUnit;
   speedUnit: SpeedUnit;
+  /** Defaults to psi — only the tire screens and tire alerts use it. */
+  pressureUnit?: PressureUnit;
 }
 
 export interface Units extends UnitPrefs {
+  pressureUnit: PressureUnit;
   tempLabel: string;
   speedLabel: string;
   distanceLabel: string;
   elevationLabel: string;
+  pressureLabel: string;
 
   /** Format a °F value in the active unit. */
   temp(f: number | null, decimals?: number): string;
@@ -54,6 +66,8 @@ export interface Units extends UnitPrefs {
   distance(mi: number | null, decimals?: number): string;
   /** Format a feet value in the active unit. */
   elevation(ft: number | null, decimals?: number): string;
+  /** Format a psi value in the active unit (bar gets 2 decimals by default). */
+  pressure(psi: number | null, decimals?: number): string;
 
   /** Map a PID registry unit label to the active unit (non-temps pass through). */
   gaugeUnit(registryUnit: string): string;
@@ -62,7 +76,7 @@ export interface Units extends UnitPrefs {
 }
 
 /** Build a formatter bound to the user's unit preferences. */
-export function makeUnits({ tempUnit, speedUnit }: UnitPrefs): Units {
+export function makeUnits({ tempUnit, speedUnit, pressureUnit = 'psi' }: UnitPrefs): Units {
   const metricDistance = speedUnit === 'kph';
 
   const format = (v: number | null, convert: (n: number) => number, decimals: number): string =>
@@ -71,16 +85,20 @@ export function makeUnits({ tempUnit, speedUnit }: UnitPrefs): Units {
   return {
     tempUnit,
     speedUnit,
+    pressureUnit,
 
     tempLabel: tempUnit === 'C' ? '°C' : TEMP_UNIT_F,
     speedLabel: metricDistance ? 'KPH' : 'MPH',
     distanceLabel: metricDistance ? 'km' : 'mi',
     elevationLabel: metricDistance ? 'M' : 'FT',
+    pressureLabel: pressureUnit === 'psi' ? 'PSI' : pressureUnit,
 
     temp: (f, decimals = 0) => format(f, (n) => convertTemp(n, tempUnit), decimals),
     speed: (mph, decimals = 0) => format(mph, (n) => convertSpeed(n, speedUnit), decimals),
     distance: (mi, decimals = 1) => format(mi, (n) => convertDistance(n, speedUnit), decimals),
     elevation: (ft, decimals = 0) => format(ft, (n) => convertElevation(n, speedUnit), decimals),
+    pressure: (psi, decimals = pressureUnit === 'bar' ? 2 : 0) =>
+      format(psi, (n) => convertPressure(n, pressureUnit), decimals),
 
     gaugeUnit: (registryUnit) =>
       registryUnit === TEMP_UNIT_F && tempUnit === 'C' ? '°C' : registryUnit,

@@ -5,6 +5,7 @@ import {
   convertSpeed,
   convertDistance,
   convertElevation,
+  convertPressure,
   makeUnits,
 } from '../units';
 
@@ -108,5 +109,26 @@ describe('gauge helpers', () => {
     const max = metric.gaugeValue('°F', 280)!;
     const val = metric.gaugeValue('°F', 210)!;
     expect((val - min) / (max - min)).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('pressure', () => {
+  it('converts psi to kPa and bar', () => {
+    expect(convertPressure(65, 'psi')).toBe(65);
+    expect(convertPressure(64.9, 'kPa')).toBeCloseTo(447.5, 0);
+    expect(convertPressure(65, 'bar')).toBeCloseTo(4.48, 2);
+  });
+
+  it('defaults to psi so existing callers are unaffected', () => {
+    const u = makeUnits({ tempUnit: 'F', speedUnit: 'mph' });
+    expect(u.pressureLabel).toBe('PSI');
+    expect(u.pressure(64.9)).toBe('65');
+    expect(u.pressure(null)).toBe('--');
+  });
+
+  it('formats bar with two decimals', () => {
+    const u = makeUnits({ tempUnit: 'C', speedUnit: 'kph', pressureUnit: 'bar' });
+    expect(u.pressureLabel).toBe('bar');
+    expect(u.pressure(65)).toBe('4.48');
   });
 });

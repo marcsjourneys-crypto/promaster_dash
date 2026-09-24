@@ -7,6 +7,7 @@ const STORAGE_KEY = 'promaster_dash_settings';
 
 export type TempUnit = 'F' | 'C';
 export type SpeedUnit = 'mph' | 'kph';
+export type PressureUnit = 'psi' | 'kPa' | 'bar';
 export type TransMode = 'auto' | '62TE' | '948TE';
 
 export interface Settings {
@@ -44,6 +45,7 @@ export interface Settings {
   startNightMode: boolean;
   tempUnit: TempUnit;
   speedUnit: SpeedUnit;
+  pressureUnit: PressureUnit;
 
   // Focus mode — up to 3 gauges rendered full-screen
   focusPids: string[];
@@ -83,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   startNightMode: false,
   tempUnit: 'F',
   speedUnit: 'mph',
+  pressureUnit: 'psi',
   focusPids: [],
   focusActive: false,
   dataRetentionDays: 365,
