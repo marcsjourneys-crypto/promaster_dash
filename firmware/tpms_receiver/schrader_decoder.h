@@ -54,8 +54,9 @@ uint8_t halfUnits(uint16_t us, const Timing& t);
 // Validate preamble + CRC on the 8 bytes after the sync nibble.
 bool parseBytes(const uint8_t b[8], Frame* out);
 
-// Search a run of in-tolerance pulses for a valid frame.
-bool decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out);
+// Decode every valid frame in a run of in-tolerance pulses (two sensors can
+// land in one run). Returns how many were written to `out`.
+size_t decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out, size_t maxOut);
 
 // Build the on-air pulse sequence for a frame. Used by the self-test and the
 // host test; the leading and trailing silence is not emitted.

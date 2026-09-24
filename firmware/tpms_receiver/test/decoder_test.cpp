@@ -58,12 +58,12 @@ static void test_roundtrip_van_sensors() {
   for (const Frame& s : sensors) {
     auto p = air(s, t);
     Frame got{};
-    CHECK(decodeRun(p.data(), p.size(), t, &got));
+    CHECK(decodeRun(p.data(), p.size(), t, &got, 1) == 1);
     CHECK(got.samePayload(s));
   }
   Frame got{};
   auto p = air(sensors[0], t);
-  decodeRun(p.data(), p.size(), t, &got);
+  decodeRun(p.data(), p.size(), t, &got, 1);
   CHECK(got.kPa() == 447.5f);
   CHECK(got.tempC() == 22);
 }
@@ -76,7 +76,7 @@ static void test_slicer_skew_tolerated() {
     auto p = air(s, t);
     for (auto& x : p) x.us = (uint16_t)(x.us + (x.level ? skew : -skew));
     Frame got{};
-    CHECK(decodeRun(p.data(), p.size(), t, &got));
+    CHECK(decodeRun(p.data(), p.size(), t, &got, 1) == 1);
     CHECK(got.samePayload(s));
   }
 }
@@ -93,7 +93,7 @@ static void test_noise_prefix_and_suffix() {
   run.push_back({120, 1});
   run.push_back({240, 0});
   Frame got{};
-  CHECK(decodeRun(run.data(), run.size(), t, &got));
+  CHECK(decodeRun(run.data(), run.size(), t, &got, 1) == 1);
   CHECK(got.samePayload(s));
 }
 
@@ -107,7 +107,7 @@ static void test_random_noise_never_decodes() {
       run[i] = Pulse{(uint16_t)(70 + std::rand() % 230), (uint8_t)((i + 1) & 1)};
     }
     Frame got{};
-    if (decodeRun(run.data(), run.size(), t, &got)) ++hits;
+    if (decodeRun(run.data(), run.size(), t, &got, 1)) ++hits;
   }
   CHECK(hits == 0);
 }
@@ -117,7 +117,21 @@ static void test_truncated_frame_rejected() {
   auto p = air(make(0x05E671A, 447.5f, 22), t);
   p.resize(p.size() - 6);
   Frame got{};
-  CHECK(!decodeRun(p.data(), p.size(), t, &got));
+  CHECK(decodeRun(p.data(), p.size(), t, &got, 1) == 0);
+}
+
+static void test_two_sensors_in_one_run() {
+  // Two bursts separated by an in-range gap arrive as one run.
+  Timing t;
+  Frame a = make(0x05E671A, 447.5f, 22), b = make(0x00FBFF7, 467.5f, 24);
+  auto run = air(a, t);
+  run.push_back({240, 0});
+  auto pb = air(b, t);
+  run.insert(run.end(), pb.begin(), pb.end());
+  Frame got[4]{};
+  CHECK(decodeRun(run.data(), run.size(), t, got, 4) == 2);
+  CHECK(got[0].samePayload(a));
+  CHECK(got[1].samePayload(b));
 }
 
 int main() {
@@ -128,6 +142,7 @@ int main() {
   test_noise_prefix_and_suffix();
   test_random_noise_never_decodes();
   test_truncated_frame_rejected();
+  test_two_sensors_in_one_run();
   if (failures) {
     std::printf("%d failure(s)\n", failures);
     return 1;

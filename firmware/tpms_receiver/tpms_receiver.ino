@@ -51,7 +51,7 @@ static const uint32_t DEFAULT_IDS[] = {0x05E671A, 0x05E670D, 0x00FA4D3, 0x00FBFF
 static const size_t RING = 2048;  // power of two
 static volatile uint32_t ring[RING];  // (level << 16) | duration_us
 static volatile uint32_t ringHead = 0;
-static uint32_t ringTail = 0;
+static volatile uint32_t ringTail = 0;  // read by the ISR's full check
 static volatile uint32_t lastEdgeUs = 0;
 static volatile uint32_t ringOverflows = 0;
 
@@ -97,28 +97,56 @@ static BLECharacteristic* configChar = nullptr;
 static BLECharacteristic* statusChar = nullptr;
 static volatile bool clientConnected = false;
 static volatile bool replayRequested = false;
+static volatile bool advertiseRequested = false;
+
+// BLE callbacks run on the Bluedroid task (core 0) while loop() runs on core
+// 1. They only hand data over; every change to the allowlist, the cache or a
+// characteristic value happens in loop(), so there is one writer.
+static portMUX_TYPE cfgMux = portMUX_INITIALIZER_UNLOCKED;
+static uint8_t pendingCfg[3 + 4 * MAX_IDS];
+static size_t pendingCfgLen = 0;
+static volatile bool pendingCfgValid = false;
+static volatile bool pendingCfgRejected = false;
+
+// Replay one cached reading per loop pass, spaced out, re-checking the link
+// each time: back-to-back notifies race a disconnect on the BLE task.
+static const uint32_t REPLAY_SPACING_MS = 30;
+static size_t replayIndex = SIZE_MAX;
+static uint32_t lastReplayMs = 0;
 
 // ---- Allowlist persistence ------------------------------------------------
 
-// putBytes() refuses zero-length values, so the count is stored separately
-// and an intentionally empty allowlist survives a reboot.
+// Stored as one fixed-size blob so a power cut mid-save can never pair a new
+// count with old IDs: NVS writes each key atomically.
+struct StoredConfig {
+  uint8_t count;
+  uint8_t learn;
+  uint8_t reserved[2];
+  uint32_t ids[MAX_IDS];
+};
+
 static void saveConfig() {
-  prefs.putUChar("count", (uint8_t)allowCount);
-  if (allowCount) prefs.putBytes("ids", allowIds, allowCount * sizeof(uint32_t));
-  prefs.putUChar("learn", learnMode ? 1 : 0);
+  StoredConfig c = {};
+  c.count = (uint8_t)allowCount;
+  c.learn = learnMode ? 1 : 0;
+  memcpy(c.ids, allowIds, allowCount * sizeof(uint32_t));
+  prefs.putBytes("cfg", &c, sizeof(c));
 }
 
 static void loadConfig() {
-  if (prefs.getUChar("count", 0xFF) == 0xFF) {
-    allowCount = sizeof(DEFAULT_IDS) / sizeof(DEFAULT_IDS[0]);
-    memcpy(allowIds, DEFAULT_IDS, sizeof(DEFAULT_IDS));
-    saveConfig();
-  } else {
-    size_t count = prefs.getUChar("count", 0);
-    allowCount = count > MAX_IDS ? MAX_IDS : count;
-    if (allowCount) prefs.getBytes("ids", allowIds, allowCount * sizeof(uint32_t));
+  StoredConfig c = {};
+  if (prefs.getBytesLength("cfg") == sizeof(c) &&
+      prefs.getBytes("cfg", &c, sizeof(c)) == sizeof(c) && c.count <= MAX_IDS) {
+    allowCount = c.count;
+    memcpy(allowIds, c.ids, allowCount * sizeof(uint32_t));
+    learnMode = c.learn != 0;
+    return;
   }
-  learnMode = prefs.getUChar("learn", 0) != 0;
+  // First boot, or unreadable: seed from the RTL-SDR capture.
+  allowCount = sizeof(DEFAULT_IDS) / sizeof(DEFAULT_IDS[0]);
+  memcpy(allowIds, DEFAULT_IDS, sizeof(DEFAULT_IDS));
+  learnMode = false;
+  saveConfig();
 }
 
 static bool isAllowed(uint32_t id) {
@@ -150,10 +178,33 @@ static bool applyConfigFrame(const uint8_t* p, size_t n) {
   allowCount = count;
   for (size_t i = 0; i < count; ++i) memcpy(&allowIds[i], p + 3 + 4 * i, 4);
   saveConfig();
-  // Forget cached readings from IDs that are no longer wanted.
+  // Re-flag cached readings against the new list.
   for (auto& c : cache)
     if (c.used) c.known = isAllowed(c.frame.id);
   return true;
+}
+
+// Apply a CONFIG write handed over by the BLE task.
+static void applyPendingConfig() {
+  if (pendingCfgRejected) {
+    pendingCfgRejected = false;
+    Serial.println("config: rejected oversized write");
+  }
+  if (!pendingCfgValid) return;
+  uint8_t buf[sizeof(pendingCfg)];
+  size_t n;
+  portENTER_CRITICAL(&cfgMux);
+  n = pendingCfgLen;
+  memcpy(buf, pendingCfg, n);
+  pendingCfgValid = false;
+  portEXIT_CRITICAL(&cfgMux);
+
+  if (applyConfigFrame(buf, n)) {
+    Serial.printf("config: %u ids, learn=%d\n", (unsigned)allowCount, learnMode);
+  } else {
+    Serial.println("config: rejected malformed write");
+  }
+  publishConfig();
 }
 
 // ---- Reporting ------------------------------------------------------------
@@ -228,18 +279,33 @@ static void handleFrame(const schrader::Frame& f) {
   digitalWrite(LED_PIN, LOW);
 }
 
-static void replayCache() {
-  for (auto& c : cache)
-    if (c.used && (c.known || learnMode)) sendReading(c, true);
+static void serviceReplay() {
+  if (replayRequested) {
+    replayRequested = false;
+    replayIndex = 0;
+  }
+  if (replayIndex >= sizeof(cache) / sizeof(cache[0])) return;
+  if (!clientConnected) {
+    replayIndex = SIZE_MAX;
+    return;
+  }
+  if (millis() - lastReplayMs < REPLAY_SPACING_MS) return;
+  const CacheEntry& c = cache[replayIndex++];
+  if (c.used && (c.known || learnMode)) {
+    sendReading(c, true);
+    lastReplayMs = millis();
+  }
 }
 
 // ---- Pulse processing -----------------------------------------------------
 
-static void tryDecode() {
+static size_t tryDecode() {
   runsTried++;
-  schrader::Frame f;
-  if (schrader::decodeRun(run, runLen, timing, &f)) handleFrame(f);
-  else if (rawDebug) Serial.printf("run of %u pulses, no frame\n", (unsigned)runLen);
+  schrader::Frame f[4];
+  size_t n = schrader::decodeRun(run, runLen, timing, f, 4);
+  for (size_t i = 0; i < n; ++i) handleFrame(f[i]);
+  if (n == 0 && rawDebug) Serial.printf("run of %u pulses, no frame\n", (unsigned)runLen);
+  return n;
 }
 
 static void endRun() {
@@ -249,10 +315,14 @@ static void endRun() {
 
 // The RX470C's AGC turns silence into in-range noise, so a run can grow
 // without bound. When the buffer fills, decode it and keep the tail, which
-// may hold the start of a frame. Duplicate decodes are absorbed by the
-// burst dedup.
+// may hold the start of a frame. If this pass decoded something, drop the
+// whole buffer instead: the tail would hand the same frame back a second
+// time, which learn mode would mistake for a confirming repeat.
 static void slideRun() {
-  tryDecode();
+  if (tryDecode() > 0) {
+    runLen = 0;
+    return;
+  }
   memmove(run, run + (RUN_CAP - RUN_KEEP), RUN_KEEP * sizeof(run[0]));
   runLen = RUN_KEEP;
 }
@@ -279,18 +349,22 @@ class ServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer*) override { clientConnected = true; }
   void onDisconnect(BLEServer*) override {
     clientConnected = false;
-    BLEDevice::startAdvertising();
+    advertiseRequested = true;  // restarted from loop()
   }
 };
 
 class ConfigCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* c) override {
-    if (applyConfigFrame(c->getData(), c->getLength())) {
-      Serial.printf("config: %u ids, learn=%d\n", (unsigned)allowCount, learnMode);
-    } else {
-      Serial.println("config: rejected malformed write");
+    size_t n = c->getLength();
+    if (n > sizeof(pendingCfg)) {
+      pendingCfgRejected = true;
+      return;
     }
-    publishConfig();
+    portENTER_CRITICAL(&cfgMux);
+    memcpy(pendingCfg, c->getData(), n);
+    pendingCfgLen = n;
+    pendingCfgValid = true;
+    portEXIT_CRITICAL(&cfgMux);
   }
 };
 
@@ -352,7 +426,7 @@ static bool selfTest() {
     schrader::Frame in{id, 0x07, 179, 72};
     size_t n = schrader::encode(in, timing, p, 140);
     schrader::Frame out{};
-    ok &= schrader::decodeRun(p, n, timing, &out) && out.samePayload(in);
+    ok &= schrader::decodeRun(p, n, timing, &out, 1) == 1 && out.samePayload(in);
   }
   Serial.printf("decoder self-test: %s\n", ok ? "PASS" : "FAIL");
   return ok;
@@ -440,10 +514,13 @@ void setup() {
 void loop() {
   drainEdges();
   handleSerial();
+  applyPendingConfig();
+  serviceReplay();
 
-  if (replayRequested) {
-    replayRequested = false;
-    replayCache();
+  if (advertiseRequested) {
+    advertiseRequested = false;
+    delay(50);  // let the stack finish tearing the link down
+    BLEDevice::startAdvertising();
   }
 
   static uint32_t lastStatus = 0;

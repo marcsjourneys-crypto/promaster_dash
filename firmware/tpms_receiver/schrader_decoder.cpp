@@ -68,13 +68,19 @@ size_t decodeFrom(const Pulse* p, size_t n, const Timing& t, uint8_t* bits) {
 
 }  // namespace
 
-bool decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out) {
+// A frame spans at least 68 pulses (every symbol a double-width pulse), so
+// after a hit the next frame cannot start sooner than this.
+static const size_t kMinFramePulses = 60;
+
+size_t decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out, size_t maxOut) {
   uint8_t bits[kMaxBits];
-  for (size_t s = 0; s < n; ++s) {
+  size_t found = 0;
+  for (size_t s = 0; s < n && found < maxOut; ++s) {
     if (!run[s].level) continue;
     size_t nb = decodeFrom(run + s, n - s, t, bits);
     if (nb < kFrameBits) continue;
-    for (size_t off = 0; off + kFrameBits <= nb; ++off) {
+    bool hit = false;
+    for (size_t off = 0; off + kFrameBits <= nb && !hit; ++off) {
       if (bits[off] != 0 || bits[off + 1] != 1 || bits[off + 2] != 1 ||
           bits[off + 3] != 1)
         continue;
@@ -82,10 +88,14 @@ bool decodeRun(const Pulse* run, size_t n, const Timing& t, Frame* out) {
       for (size_t i = 0; i < 64; ++i) {
         b[i >> 3] |= (uint8_t)(bits[off + 4 + i] << (7 - (i & 7)));
       }
-      if (parseBytes(b, out)) return true;
+      hit = parseBytes(b, &out[found]);
+    }
+    if (hit) {
+      ++found;
+      s += kMinFramePulses - 1;  // skip past this frame's body
     }
   }
-  return false;
+  return found;
 }
 
 size_t encode(const Frame& f, const Timing& t, Pulse* out, size_t max) {
