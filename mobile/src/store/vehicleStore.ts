@@ -18,7 +18,7 @@ import type { TempUnit, PressureUnit } from '../config/settings';
 import { makeUnits } from '../utils/units';
 import { DEFAULT_TPMS_CONFIG, POSITION_LABELS, type TpmsConfig } from '../config/tpmsConfig';
 import type { TpmsReading, TpmsReceiverStatus } from '../services/tpmsProtocol';
-import { resolveTires, type TireView } from '../utils/tpmsLayout';
+import { formatAge, resolveTires, type TireView } from '../utils/tpmsLayout';
 
 export type AlertPriority = 'none' | 'warning' | 'critical';
 
@@ -208,10 +208,14 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
     // Thresholds below stay in °F; only the message text is converted.
     const u = makeUnits({ tempUnit: s.tempUnit, speedUnit: 'mph', pressureUnit: s.pressureUnit });
     const t = (f: number) => `${u.temp(f)}${u.tempLabel}`;
-    const p = (tire: TireView) => `${u.pressure(tire.reading!.psi)} ${u.pressureLabel}`;
+    // A stale reading is labelled with its age: a parked van's sensors are
+    // silent, so the number may predate a reinflation.
+    const p = (tire: TireView) =>
+      `${u.pressure(tire.reading!.psi)} ${u.pressureLabel}` +
+      (tire.stale ? ` (${formatAge(tire.ageMs)} ago)` : '');
     // Unassigned sensors never alert: without a wheel there is no target.
     const tires = Object.values(resolveTires(s.tpmsConfig, s.tpmsReadings, Date.now()).tires);
-    const tireWith = (status: TireView['status']) => tires.find((x) => x.status === status);
+    const liveTire = (status: TireView['status']) => tires.find((x) => x.status === status && !x.stale);
 
     const fireAlert = (message: string, priority: AlertPriority, severity: 'warning' | 'critical') => {
       // Push to history only when the message changes (avoid duplicate entries)
@@ -253,7 +257,7 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
       fireAlert(`OIL TEMP CRITICAL: ${t(s.oilTempF)}`, 'critical', 'critical');
       return;
     }
-    const flat = tireWith('lowCrit');
+    const flat = liveTire('lowCrit');
     if (flat) {
       fireAlert(`TIRE LOW: ${POSITION_LABELS[flat.position].toUpperCase()} ${p(flat)}`, 'critical', 'critical');
       return;
@@ -276,21 +280,6 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
       fireAlert(`Oil temp warning: ${t(s.oilTempF)}`, 'warning', 'warning');
       return;
     }
-    const soft = tireWith('lowWarn');
-    if (soft) {
-      fireAlert(`Tire low: ${POSITION_LABELS[soft.position]} ${p(soft)}`, 'warning', 'warning');
-      return;
-    }
-    const high = tireWith('high');
-    if (high) {
-      fireAlert(`Tire pressure high: ${POSITION_LABELS[high.position]} ${p(high)}`, 'warning', 'warning');
-      return;
-    }
-    const hot = tireWith('hot');
-    if (hot) {
-      fireAlert(`Tire hot: ${POSITION_LABELS[hot.position]} ${t(hot.reading!.tempF)}`, 'warning', 'warning');
-      return;
-    }
     if (s.intakeAirF !== null && s.intakeAirF >= 180) {
       fireAlert(`INTAKE AIR CRITICAL: ${t(s.intakeAirF)}`, 'critical', 'critical');
       return;
@@ -307,6 +296,26 @@ export const useVehicleStore = create<VehicleStore>((set, get) => ({
     }
     if (s.voltageV !== null && s.voltageV > VOLT_HIGH) {
       fireAlert(`Voltage high: ${s.voltageV.toFixed(1)}V`, 'warning', 'warning');
+      return;
+    }
+
+    // Priority 5: Tires — below every OBD alert so they can never mask one. A stale
+    // low tire still warns — flat is flat — but no longer claims critical.
+    const soft = tires.find(
+      (x) => x.status === 'lowWarn' || (x.status === 'lowCrit' && x.stale),
+    );
+    if (soft) {
+      fireAlert(`Tire low: ${POSITION_LABELS[soft.position]} ${p(soft)}`, 'warning', 'warning');
+      return;
+    }
+    const high = liveTire('high');
+    if (high) {
+      fireAlert(`Tire pressure high: ${POSITION_LABELS[high.position]} ${p(high)}`, 'warning', 'warning');
+      return;
+    }
+    const hot = liveTire('hot');
+    if (hot) {
+      fireAlert(`Tire hot: ${POSITION_LABELS[hot.position]} ${t(hot.reading!.tempF)}`, 'warning', 'warning');
       return;
     }
 

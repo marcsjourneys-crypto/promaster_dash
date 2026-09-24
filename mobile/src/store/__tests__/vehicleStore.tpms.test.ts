@@ -89,3 +89,29 @@ it('re-evaluates when the config changes', () => {
   state().setTpmsConfig({ ...MAPPED, rearTargetPsi: 70 });
   expect(state().alertPriority).toBe('none');
 });
+
+it('ranks tire warnings below intake-air and voltage alerts', () => {
+  useVehicleStore.setState({ intakeAirF: 185 });
+  state().updateTpms(reading('00FA4D3', 70));
+  expect(state().alertMessage).toBe('INTAKE AIR CRITICAL: 185°F');
+
+  useVehicleStore.setState({ intakeAirF: null, voltageV: 11.5 });
+  state().computeAlert();
+  expect(state().alertMessage).toBe('Battery low: 11.5V');
+});
+
+it('a stale flat is a labelled warning, not a critical', () => {
+  useVehicleStore.setState({ transF: 225 });
+  state().updateTpms(reading('05E671A', 40, { ts: Date.now() - 3 * 3600_000 }));
+  expect(state().alertMessage).toBe('Trans temp warning: 225°F');
+
+  useVehicleStore.setState({ transF: null });
+  state().computeAlert();
+  expect(state().alertPriority).toBe('warning');
+  expect(state().alertMessage).toBe('Tire low: Left Front 40 PSI (3h ago)');
+});
+
+it('stale high or hot readings stay silent', () => {
+  state().updateTpms(reading('05E671A', 90, { ts: Date.now() - 3 * 3600_000 }));
+  expect(state().alertPriority).toBe('none');
+});

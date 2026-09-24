@@ -15,8 +15,13 @@ import type { TpmsReading } from '../services/tpmsProtocol';
 /** A drop this large is deliberate, not temperature drift or 1-count jitter. */
 export const LEARN_DROP_PSI = 2;
 export const LEARN_TIMEOUT_MS = 3 * 60 * 1000;
+/**
+ * The winner must beat the runner-up by this much. Tires cooling after a
+ * drive also lose pressure; a clear margin keeps that from picking a wheel.
+ */
+export const LEARN_MARGIN_PSI = 2;
 
-export type LearnPhase = 'waiting' | 'proposed' | 'timeout';
+export type LearnPhase = 'waiting' | 'proposed' | 'ambiguous' | 'timeout';
 
 export interface LearnState {
   corner: TirePosition;
@@ -47,7 +52,7 @@ export function evaluateLearn(
   if (nowMs - state.startedAt > LEARN_TIMEOUT_MS) return { ...state, phase: 'timeout' };
 
   let baselines = state.baselines;
-  let best: { id: string; drop: number } | null = null;
+  const drops: { id: string; drop: number }[] = [];
 
   for (const r of Object.values(readings)) {
     // Cache replays and anything heard before the wizard started carry no
@@ -59,11 +64,15 @@ export function evaluateLearn(
       continue;
     }
     const drop = base - r.psi;
-    if (drop >= LEARN_DROP_PSI && (!best || drop > best.drop)) best = { id: r.id, drop };
+    if (drop >= LEARN_DROP_PSI) drops.push({ id: r.id, drop });
   }
 
-  if (best) {
-    return { ...state, baselines, phase: 'proposed', proposedId: best.id, dropPsi: best.drop };
+  if (drops.length > 0) {
+    drops.sort((a, b) => b.drop - a.drop);
+    const [best, runnerUp] = drops;
+    const phase: LearnPhase =
+      runnerUp && best.drop - runnerUp.drop < LEARN_MARGIN_PSI ? 'ambiguous' : 'proposed';
+    return { ...state, baselines, phase, proposedId: best.id, dropPsi: best.drop };
   }
   return baselines === state.baselines ? state : { ...state, baselines };
 }

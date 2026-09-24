@@ -37,7 +37,14 @@ const REPLAY_DELAY_MS = 500;
 
 let started = false;
 let connectedId: string | null = null;
-let connecting = false;
+/** Receiver a connect attempt is in flight for. */
+let pendingId: string | null = null;
+/**
+ * Bumped by every connect and every disconnect. An in-flight attempt checks it
+ * after each await and bails if it has been superseded, so pairing or
+ * forgetting mid-connect always wins over the older attempt.
+ */
+let generation = 0;
 let subs: Subscription[] = [];
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = BACKOFF_MIN_MS;
@@ -54,7 +61,10 @@ export interface FoundReceiver {
 export async function startTpms(): Promise<void> {
   if (started) return;
   started = true;
-  const config = await loadTpmsConfig();
+  const before = store().tpmsConfig;
+  const loaded = await loadTpmsConfig();
+  // Don't clobber an edit made while the load was in flight.
+  const config = store().tpmsConfig === before ? loaded : store().tpmsConfig;
   store().setTpmsConfig(config);
   if (config.receiverId) void connectReceiver(config.receiverId);
 }
@@ -167,16 +177,26 @@ export async function requestReplay(): Promise<void> {
 }
 
 async function connectReceiver(id: string): Promise<void> {
-  if (connecting || connectedId === id) return;
-  connecting = true;
+  if (connectedId === id || pendingId === id) return;
+  const gen = ++generation;
+  const superseded = () => gen !== generation;
+  // Drop the link this attempt opened — unless a newer attempt now wants the
+  // same receiver (forget then re-pair), in which case it is theirs.
+  const abandon = () => {
+    if (pendingId !== id && connectedId !== id) mgr.cancelDeviceConnection(id).catch(() => {});
+  };
+  pendingId = id;
   clearReconnect();
   const mgr = initBLE();
 
   try {
     if (!(await waitForPoweredOn(mgr, 10_000))) throw new Error('Bluetooth is off');
+    if (superseded()) return;
     dlog(`TPMS: connecting to receiver [${id}]`);
     const device = await mgr.connectToDevice(id, { timeout: CONNECT_TIMEOUT_MS });
+    if (superseded()) return abandon();
     await device.discoverAllServicesAndCharacteristics();
+    if (superseded()) return abandon();
     connectedId = id;
 
     subs.push(mgr.onDeviceDisconnected(id, (err) => handleDisconnect(id, err)));
@@ -204,23 +224,26 @@ async function connectReceiver(id: string): Promise<void> {
     }));
 
     const cfgChar = await mgr.readCharacteristicForDevice(id, TPMS_SERVICE_UUID, TPMS_CONFIG_UUID);
+    if (superseded()) return; // disconnectReceiver already tore this link down
     const receiverCfg = cfgChar.value ? decodeConfigFrame(base64ToBytes(cfgChar.value)) : null;
     if (receiverCfg) store().setTpmsLearnMode(receiverCfg.learn);
 
     await pushAllowlist();
+    if (superseded()) return;
     store().setTpmsConnected(true);
     backoffMs = BACKOFF_MIN_MS;
     dlog('TPMS: receiver connected');
 
     await new Promise((r) => setTimeout(r, REPLAY_DELAY_MS));
-    await requestReplay();
+    if (!superseded()) await requestReplay();
   } catch (e) {
+    if (superseded()) return; // a newer connect or a forget owns the state now
     dlog(`TPMS: connect failed: ${errText(e)}`);
     teardown();
     mgr.cancelDeviceConnection(id).catch(() => {}); // a half-set-up link is useless
     scheduleReconnect(id);
   } finally {
-    connecting = false;
+    if (gen === generation && pendingId === id) pendingId = null;
   }
 }
 
@@ -232,14 +255,16 @@ function handleDisconnect(id: string, err: unknown): void {
 }
 
 async function disconnectReceiver(): Promise<void> {
+  generation++; // supersedes any in-flight connect
   clearReconnect();
-  const id = connectedId;
+  const ids = [...new Set([connectedId, pendingId].filter((x): x is string => x !== null))];
+  pendingId = null;
   teardown();
-  if (id) {
+  for (const id of ids) {
     try {
       await initBLE().cancelDeviceConnection(id);
     } catch {
-      // already gone
+      // already gone, or never got that far
     }
   }
 }

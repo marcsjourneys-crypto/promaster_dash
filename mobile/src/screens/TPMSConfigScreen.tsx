@@ -40,7 +40,13 @@ import {
   updateTpmsConfig,
   type FoundReceiver,
 } from '../services/tpmsService';
-import { LEARN_DROP_PSI, LEARN_TIMEOUT_MS, evaluateLearn, startLearn, type LearnState } from '../utils/tpmsLearn';
+import {
+  LEARN_DROP_PSI,
+  LEARN_TIMEOUT_MS,
+  evaluateLearn,
+  startLearn,
+  type LearnState,
+} from '../utils/tpmsLearn';
 import { formatAge } from '../utils/tpmsLayout';
 
 type Tab = 'receiver' | 'sensors' | 'identify' | 'limits';
@@ -116,20 +122,30 @@ function ReceiverTab({
   const [found, setFound] = useState<FoundReceiver[]>([]);
   const [scanning, setScanning] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => stopRef.current?.(), []);
+  const stopScan = () => {
+    stopRef.current?.();
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setScanning(false);
+  };
+
+  useEffect(() => () => {
+    stopRef.current?.();
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
 
   const scan = () => {
-    stopRef.current?.();
+    stopScan();
     setFound([]);
     setScanning(true);
     stopRef.current = scanForReceivers((r) => setFound((prev) => [...prev, r]), SCAN_MS);
-    setTimeout(() => setScanning(false), SCAN_MS);
+    timerRef.current = setTimeout(() => setScanning(false), SCAN_MS);
   };
 
   const pair = (r: FoundReceiver) => {
-    stopRef.current?.();
-    setScanning(false);
+    stopScan();
     pairReceiver(r).catch(() => {});
   };
 
@@ -329,7 +345,9 @@ function IdentifyTab({
         <Text style={styles.hint}>
           Tap a wheel, then let a few psi out of that tire. The sensor transmits
           as soon as its pressure drops, and the one that fell is that wheel.
-          Reinflate afterwards. Redo this after rotating tires.
+          Do it with cold tires (parked an hour or more): tires cooling after a
+          drive lose pressure too. Reinflate afterwards, and redo this after
+          rotating tires.
         </Text>
         {missing.length > 0 && (
           <Text style={[styles.hint, styles.warnText]}>
@@ -397,13 +415,18 @@ function IdentifyTab({
     );
   }
 
-  if (learn.phase === 'timeout') {
+  if (learn.phase === 'timeout' || learn.phase === 'ambiguous') {
     return (
       <>
-        <Text style={styles.sectionHeader}>NO DROP SEEN</Text>
+        <Text style={styles.sectionHeader}>
+          {learn.phase === 'timeout' ? 'NO DROP SEEN' : 'NOT SURE WHICH'}
+        </Text>
         <Text style={styles.hint}>
-          No sensor lost {LEARN_DROP_PSI} psi or more in {LEARN_TIMEOUT_MS / 60000} minutes.
-          Let out a little more air, and check the receiver is connected.
+          {learn.phase === 'timeout'
+            ? `No sensor lost ${LEARN_DROP_PSI} psi or more in ${LEARN_TIMEOUT_MS / 60000} minutes. ` +
+              'Let out a little more air, and check the receiver is connected.'
+            : 'More than one sensor dropped by a similar amount, probably tires cooling ' +
+              'after a drive. Let the tires cool, then try again with a bigger drop.'}
         </Text>
         <View style={styles.actions}>
           <Pressable style={styles.btn} onPress={() => setLearn(startLearn(learn.corner, readings, Date.now()))}>

@@ -46,14 +46,25 @@ it('a sensor first heard after the start becomes its own baseline', () => {
   expect(s.proposedId).toBe('A');
 });
 
-it('picks the biggest drop when two sensors fall', () => {
+it('picks the biggest drop when it clearly wins', () => {
   let s = startLearn('RR', BEFORE, T0);
   s = evaluateLearn(
     s,
     { A: r('A', 62.5, T0 + 3_000), B: r('B', 59, T0 + 3_000), C: BEFORE.C },
     T0 + 3_000,
   );
+  expect(s.phase).toBe('proposed');
   expect(s.proposedId).toBe('B');
+});
+
+it('refuses to guess when two drops are close (tires cooling after a drive)', () => {
+  let s = startLearn('RR', BEFORE, T0);
+  s = evaluateLearn(
+    s,
+    { A: r('A', 62, T0 + 3_000), B: r('B', 61, T0 + 3_000), C: BEFORE.C },
+    T0 + 3_000,
+  );
+  expect(s.phase).toBe('ambiguous');
 });
 
 it('times out and then stays put', () => {
