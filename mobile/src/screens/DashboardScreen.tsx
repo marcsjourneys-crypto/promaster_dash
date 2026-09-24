@@ -204,15 +204,19 @@ export function DashboardScreen({
       </ScrollView>
 
       {/* ---- Bottom action buttons ---- */}
+      {/* Four across is tight on a phone: labels shrink to one line, never wrap. */}
       <View style={styles.actionRow}>
         <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('trips')}>
-          <Text style={styles.actionBtnText}>TRIPS</Text>
+          <Text style={styles.actionBtnText} numberOfLines={1} adjustsFontSizeToFit>TRIPS</Text>
+        </Pressable>
+        <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('tpms')}>
+          <Text style={styles.actionBtnText} numberOfLines={1} adjustsFontSizeToFit>TIRES</Text>
         </Pressable>
         <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('codes')}>
-          <Text style={styles.actionBtnText}>SCAN CODES</Text>
+          <Text style={styles.actionBtnText} numberOfLines={1} adjustsFontSizeToFit>SCAN CODES</Text>
         </Pressable>
         <Pressable style={styles.actionBtn} onPress={() => onNavigate?.('maintenance')}>
-          <Text style={styles.actionBtnText}>MAINT LOG</Text>
+          <Text style={styles.actionBtnText} numberOfLines={1} adjustsFontSizeToFit>MAINT LOG</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -398,6 +402,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 220, 160, 0.33)',
     borderRadius: 10,
     paddingVertical: 12,
+    paddingHorizontal: 4,
     alignItems: 'center',
   },
   actionBtnText: {

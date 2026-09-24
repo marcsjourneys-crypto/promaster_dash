@@ -19,6 +19,7 @@ import {
   DEFAULT_SETTINGS,
   type Settings,
   type TransMode,
+  type PressureUnit,
 } from '../config/settings';
 import { applyTransModeChange } from '../services/transPathResolver';
 import {
@@ -412,6 +413,24 @@ export function SettingsScreen({ onBack, liveMode, onLiveModeChange, onNavigate 
                 >
                   <Text style={[styles.unitBtnText, settings.speedUnit === 'kph' && styles.unitBtnTextActive]}>KPH</Text>
                 </Pressable>
+              </View>
+            </View>
+            <View style={styles.unitRow}>
+              <Text style={styles.switchLabel}>Tire Pressure</Text>
+              <View style={styles.unitToggle}>
+                {([
+                  { unit: 'psi', label: 'PSI' },
+                  { unit: 'kPa', label: 'kPa' },
+                  { unit: 'bar', label: 'BAR' },
+                ] as { unit: PressureUnit; label: string }[]).map(({ unit, label }) => (
+                  <Pressable
+                    key={unit}
+                    style={[styles.unitBtn, settings.pressureUnit === unit && styles.unitBtnActive]}
+                    onPress={() => update('pressureUnit', unit)}
+                  >
+                    <Text style={[styles.unitBtnText, settings.pressureUnit === unit && styles.unitBtnTextActive]}>{label}</Text>
+                  </Pressable>
+                ))}
               </View>
             </View>
 

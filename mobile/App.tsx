@@ -15,12 +15,17 @@ import { setEnabledPids } from './src/services/obdService';
 import { seedDefaultSchedule, getScheduleWithStatus } from './src/services/maintenanceService';
 import { MaintenanceScreen } from './src/screens/MaintenanceScreen';
 import { CodesScreen } from './src/screens/CodesScreen';
+import { TPMSScreen } from './src/screens/TPMSScreen';
+import { TPMSConfigScreen } from './src/screens/TPMSConfigScreen';
+import { startTpms } from './src/services/tpmsService';
 import { initDatabase, seedDemoTrips, seedDemoMaintenance, clearDemoData } from './src/services/loggingService';
 import { restoreTrip, tickWatchdog } from './src/services/tripManager';
 import { makeUnits } from './src/utils/units';
 import { useVehicleStore } from './src/store/vehicleStore';
 
-type Screen = 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance' | 'codes';
+type Screen =
+  | 'dashboard' | 'trips' | 'ble' | 'settings' | 'alerts' | 'debug' | 'maintenance' | 'codes'
+  | 'tpms' | 'tpmsConfig';
 
 let reminderShown = false;
 
@@ -78,6 +83,9 @@ export default function App() {
       }
 
       watchdogTimer = setInterval(tickWatchdog, 60_000);
+
+      // Tire receiver: loads its config and reconnects if one is paired.
+      startTpms().catch(() => {});
     }
 
     startup();
@@ -104,14 +112,22 @@ export default function App() {
 
   // Display units — derived from settings, applied at render time only
   const units = useMemo(
-    () => makeUnits({ tempUnit: settings.tempUnit, speedUnit: settings.speedUnit }),
-    [settings.tempUnit, settings.speedUnit],
+    () => makeUnits({
+      tempUnit: settings.tempUnit,
+      speedUnit: settings.speedUnit,
+      pressureUnit: settings.pressureUnit,
+    }),
+    [settings.tempUnit, settings.speedUnit, settings.pressureUnit],
   );
 
   // Alert messages are built inside the store, so it needs the temperature unit
   useEffect(() => {
     useVehicleStore.getState().setTempUnit(settings.tempUnit);
   }, [settings.tempUnit]);
+
+  useEffect(() => {
+    useVehicleStore.getState().setPressureUnit(settings.pressureUnit);
+  }, [settings.pressureUnit]);
 
   const handleNavigate = useCallback((s: string) => {
     // Map any route to valid screens
@@ -191,6 +207,16 @@ export default function App() {
           )}
           {screen === 'codes' && (
             <CodesScreen onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'tpms' && (
+            <TPMSScreen
+              onBack={() => setScreen('dashboard')}
+              onConfigure={() => setScreen('tpmsConfig')}
+              units={units}
+            />
+          )}
+          {screen === 'tpmsConfig' && (
+            <TPMSConfigScreen onBack={() => setScreen('tpms')} />
           )}
           {screen === 'maintenance' && (
             <MaintenanceScreen

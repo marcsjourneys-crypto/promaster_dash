@@ -18,7 +18,7 @@
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ProMaster Dash uses your location to track trips and display speed, heading, and elevation.",
         "NSLocationWhenInUseUsageDescription": "ProMaster Dash uses your location to display speed, heading, and elevation.",
-        "NSBluetoothAlwaysUsageDescription": "ProMaster Dash connects to your VLinker OBD2 adapter via Bluetooth to read vehicle data.",
+        "NSBluetoothAlwaysUsageDescription": "ProMaster Dash connects to your OBD2 adapter and to the PM-TPMS tire sensor receiver via Bluetooth to read vehicle data.",
         "UIBackgroundModes": [
           "location",
           "bluetooth-central"
